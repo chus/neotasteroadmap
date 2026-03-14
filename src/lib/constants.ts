@@ -1,4 +1,4 @@
-import type { Column, Criterion, Track } from '@/types'
+import type { Column, Criterion } from '@/types'
 
 export const COLUMNS: { id: Column; label: string; sublabel: string }[] = [
   { id: 'now', label: 'Now', sublabel: 'Q1–Q2' },
@@ -13,11 +13,4 @@ export const CRITERION_CONFIG: Record<Criterion, { label: string; color: string;
   dependency:      { label: 'Team dependency', color: '#633806', bg: '#FAEEDA', border: '#EF9F27', badge: '#FAEEDA' },
   research:        { label: 'Research needed', color: '#3C3489', bg: '#EEEDFE', border: '#AFA9EC', badge: '#EEEDFE' },
   parked:          { label: 'Parked',           color: '#444441', bg: '#F1EFE8', border: '#B4B2A9', badge: '#F1EFE8' },
-}
-
-export const TRACK_LABELS: Record<Track, string> = {
-  discovery: 'Discovery',
-  conversion: 'Trial conversion',
-  churn: 'Churn',
-  partner: 'Partner',
 }
