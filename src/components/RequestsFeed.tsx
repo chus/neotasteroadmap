@@ -6,7 +6,7 @@ import RequestCard from './RequestCard'
 import RequestModal from './RequestModal'
 import PromoteModal from './PromoteModal'
 import Toast from './Toast'
-import { createFeatureRequest, promoteToRoadmap } from '@/app/actions'
+import { createFeatureRequest, promoteToRoadmap, getCommentCounts } from '@/app/actions'
 import type { FeatureRequest, StrategicLevel, RequestStatus, Column, Criterion } from '@/types'
 
 const STATUS_TABS: { key: string; label: string }[] = [
@@ -20,9 +20,10 @@ const STATUS_TABS: { key: string; label: string }[] = [
 interface Props {
   initialRequests: FeatureRequest[]
   strategicLevels: StrategicLevel[]
+  initialCommentCounts?: Record<string, number>
 }
 
-export default function RequestsFeed({ initialRequests, strategicLevels }: Props) {
+export default function RequestsFeed({ initialRequests, strategicLevels, initialCommentCounts = {} }: Props) {
   const searchParams = useSearchParams()
   const isAdmin = searchParams.get('admin') === '1'
 
@@ -33,6 +34,7 @@ export default function RequestsFeed({ initialRequests, strategicLevels }: Props
   const [toast, setToast] = useState<string | null>(null)
   const [votedIds, setVotedIds] = useState<Set<string>>(new Set())
   const [promotingRequest, setPromotingRequest] = useState<FeatureRequest | null>(null)
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>(initialCommentCounts)
 
   useEffect(() => {
     const stored = localStorage.getItem('voted_request_ids')
@@ -130,7 +132,7 @@ export default function RequestsFeed({ initialRequests, strategicLevels }: Props
       <div className="space-y-2">
         {filtered.length > 0 ? (
           filtered.map((r) => (
-            <RequestCard key={r.id} request={r} isAdmin={isAdmin} votedIds={votedIds} onVoted={markVoted} onPromote={setPromotingRequest} />
+            <RequestCard key={r.id} request={r} isAdmin={isAdmin} votedIds={votedIds} onVoted={markVoted} onPromote={setPromotingRequest} commentCount={commentCounts[r.id] ?? 0} />
           ))
         ) : (
           <div className="text-center py-12">

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { CRITERION_CONFIG, COLUMNS } from '@/lib/constants'
+import { CRITERION_CONFIG, COLUMNS, EFFORT_CONFIG } from '@/lib/constants'
 import { getLinkedRequest } from '@/app/actions'
 import type { Initiative, StrategicLevel, FeatureRequest, Criterion, Column } from '@/types'
 
@@ -15,6 +15,8 @@ interface Props {
     criterion: Criterion
     criterion_secondary: Criterion | null
     dep_note: string
+    effort?: string | null
+    is_public?: boolean
     column?: Column
   }) => void
   onDelete: () => void
@@ -34,6 +36,8 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
     criterion: initiative.criterion,
     criterion_secondary: initiative.criterion_secondary ?? ('' as string),
     dep_note: initiative.dep_note,
+    effort: initiative.effort ?? '',
+    is_public: initiative.is_public,
     column: initiative.column as string,
   })
 
@@ -64,6 +68,8 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
       criterion: form.criterion,
       criterion_secondary: form.criterion_secondary ? (form.criterion_secondary as Criterion) : null,
       dep_note: form.dep_note,
+      effort: form.effort || null,
+      is_public: form.is_public,
       column: form.column as Column,
     })
   }
@@ -160,9 +166,32 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Dependency note</label>
-                <input className="mt-1 w-full text-[12px] border border-neutral-300 rounded-lg px-3 py-2 outline-none focus:border-neutral-500" value={form.dep_note} onChange={(e) => setForm({ ...form, dep_note: e.target.value })} />
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Effort estimate</label>
+                  <select className="mt-1 w-full text-[12px] border border-neutral-300 rounded-lg px-3 py-2 outline-none" value={form.effort} onChange={(e) => setForm({ ...form, effort: e.target.value })}>
+                    <option value="">None</option>
+                    {Object.entries(EFFORT_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                  <p className="text-[10px] text-neutral-400 mt-0.5">XS = hours, S = days, M = 1–2 weeks, L = 3–4 weeks, XL = 4+ weeks.</p>
+                </div>
+                <div className="flex-1">
+                  <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Dependency note</label>
+                  <input className="mt-1 w-full text-[12px] border border-neutral-300 rounded-lg px-3 py-2 outline-none focus:border-neutral-500" value={form.dep_note} onChange={(e) => setForm({ ...form, dep_note: e.target.value })} />
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Visible on public roadmap</label>
+                  <p className="text-[10px] text-neutral-400 mt-0.5">Public items are visible to anyone with the link at /public.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, is_public: !form.is_public })}
+                  className={`relative w-9 h-5 rounded-full transition-colors ${form.is_public ? 'bg-green-500' : 'bg-neutral-300'}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${form.is_public ? 'translate-x-4' : ''}`} />
+                </button>
               </div>
               <div className="flex items-center justify-between pt-3 border-t border-neutral-100">
                 <button onClick={onDelete} className="text-[12px] text-red-500 hover:text-red-700">Delete initiative</button>
@@ -264,6 +293,12 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                   <dt className="text-neutral-400">Column</dt>
                   <dd className="text-neutral-600">
                     {columnLabel}{columnSublabel ? ` (${columnSublabel})` : ''}
+                  </dd>
+                  <dt className="text-neutral-400">Effort</dt>
+                  <dd className="text-neutral-600">
+                    {initiative.effort && EFFORT_CONFIG[initiative.effort]
+                      ? EFFORT_CONFIG[initiative.effort].label
+                      : '—'}
                   </dd>
                   <dt className="text-neutral-400">Primary criterion</dt>
                   <dd className="text-neutral-600">{config.label}</dd>

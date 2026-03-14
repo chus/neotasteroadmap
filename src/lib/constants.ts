@@ -14,3 +14,11 @@ export const CRITERION_CONFIG: Record<Criterion, { label: string; color: string;
   research:        { label: 'Research needed', color: '#3C3489', bg: '#EEEDFE', border: '#AFA9EC', badge: '#EEEDFE' },
   parked:          { label: 'Parked',           color: '#444441', bg: '#F1EFE8', border: '#B4B2A9', badge: '#F1EFE8' },
 }
+
+export const EFFORT_CONFIG: Record<string, { label: string; color: string }> = {
+  xs: { label: 'XS', color: '#888780' },
+  s:  { label: 'S',  color: '#1D9E75' },
+  m:  { label: 'M',  color: '#378ADD' },
+  l:  { label: 'L',  color: '#BA7517' },
+  xl: { label: 'XL', color: '#D85A30' },
+}

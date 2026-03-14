@@ -1,6 +1,15 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { searchFeatureRequests, voteOnRequest } from '@/app/actions'
+
+const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  open:         { bg: '#F1F1F1', text: '#666', label: 'Open' },
+  under_review: { bg: '#E6F1FB', text: '#0C447C', label: 'Under review' },
+  planned:      { bg: '#EEEDFE', text: '#3C3489', label: 'Planned' },
+  declined:     { bg: '#FEE9E9', text: '#9B1C1C', label: 'Declined' },
+  promoted:     { bg: '#E1F5EE', text: '#085041', label: 'Promoted' },
+}
 
 interface Props {
   onSubmit: (data: {
@@ -12,6 +21,7 @@ interface Props {
     customer_evidence: string
     submitter_name: string
     submitter_role: string
+    submitter_email: string
   }) => void
   onClose: () => void
 }
@@ -25,6 +35,7 @@ const fields = [
   { key: 'customer_evidence', label: 'Evidence', helper: "Paste quotes, ticket numbers, survey data, or session replay links. Vague references don't count.", type: 'textarea', required: true },
   { key: 'submitter_name', label: 'Your name', helper: '', type: 'input', required: true },
   { key: 'submitter_role', label: 'Your role', helper: 'e.g. Restaurant partner, Customer success, Marketing', type: 'input', required: false },
+  { key: 'submitter_email', label: 'Your email', helper: "We'll notify you when the status of your request changes. Nothing else.", type: 'email', required: false },
 ] as const
 
 type FormData = {
@@ -36,6 +47,7 @@ type FormData = {
   customer_evidence: string
   submitter_name: string
   submitter_role: string
+  submitter_email: string
 }
 
 const emptyForm: FormData = {
@@ -47,6 +59,7 @@ const emptyForm: FormData = {
   customer_evidence: '',
   submitter_name: '',
   submitter_role: '',
+  submitter_email: '',
 }
 
 const requiredKeys: (keyof FormData)[] = [
@@ -56,7 +69,10 @@ const requiredKeys: (keyof FormData)[] = [
 
 export default function RequestModal({ onSubmit, onClose }: Props) {
   const [form, setForm] = useState<FormData>(emptyForm)
+  const [duplicates, setDuplicates] = useState<{ id: string; title: string; vote_count: number; status: string }[]>([])
+  const [searchingDupes, setSearchingDupes] = useState(false)
   const backdropRef = useRef<HTMLDivElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -73,8 +89,34 @@ export default function RequestModal({ onSubmit, onClose }: Props) {
   const filledCount = requiredKeys.filter((k) => form[k].trim().length > 0).length
   const allFilled = filledCount === requiredKeys.length
 
+  const searchDuplicates = useCallback((query: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (query.length < 5) {
+      setDuplicates([])
+      return
+    }
+    debounceRef.current = setTimeout(async () => {
+      setSearchingDupes(true)
+      try {
+        const results = await searchFeatureRequests(query)
+        setDuplicates(results.slice(0, 3))
+      } finally {
+        setSearchingDupes(false)
+      }
+    }, 400)
+  }, [])
+
   function update(key: keyof FormData, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }))
+    if (key === 'title') {
+      searchDuplicates(value)
+    }
+  }
+
+  async function handleVoteDuplicate(id: string) {
+    await voteOnRequest(id)
+    onClose()
+    window.location.href = `/requests#${id}`
   }
 
   return (
@@ -111,10 +153,49 @@ export default function RequestModal({ onSubmit, onClose }: Props) {
                 />
               ) : (
                 <input
-                  className="w-full text-[13px] border border-neutral-300 rounded-lg px-3 py-2 outline-none focus:border-neutral-500"
+                  type={f.type === 'email' ? 'email' : 'text'}
+                  className={`w-full text-[13px] border rounded-lg px-3 py-2 outline-none focus:border-neutral-500 ${
+                    f.key === 'title' && duplicates.length > 0
+                      ? 'border-amber-400'
+                      : 'border-neutral-300'
+                  }`}
                   value={form[f.key as keyof FormData]}
                   onChange={(e) => update(f.key as keyof FormData, e.target.value)}
                 />
+              )}
+              {f.key === 'title' && duplicates.length > 0 && (
+                <div className="mt-2 border border-amber-200 rounded-lg bg-amber-50 p-3">
+                  <div className="text-[10px] font-medium text-amber-700 uppercase tracking-wide mb-2">
+                    Similar requests already submitted
+                  </div>
+                  <div className="space-y-2">
+                    {duplicates.map((d) => {
+                      const statusConf = STATUS_COLORS[d.status] ?? STATUS_COLORS.open
+                      return (
+                        <div key={d.id} className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-[13px] font-medium text-neutral-800 truncate">{d.title}</span>
+                            <span
+                              className="shrink-0 text-[9px] font-medium px-1.5 py-0.5 rounded"
+                              style={{ backgroundColor: statusConf.bg, color: statusConf.text }}
+                            >
+                              {statusConf.label}
+                            </span>
+                            <span className="shrink-0 text-[10px] text-neutral-400">{d.vote_count} votes</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleVoteDuplicate(d.id)}
+                            className="shrink-0 text-[11px] font-medium text-amber-700 hover:text-amber-900"
+                          >
+                            Vote on this instead
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <p className="text-[10px] text-amber-600 mt-2">If your request is different, continue below.</p>
+                </div>
               )}
             </div>
           ))}

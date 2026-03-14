@@ -1,5 +1,5 @@
 import { Suspense } from 'react'
-import { getFeatureRequests, getStrategicLevels } from '../actions'
+import { getFeatureRequests, getStrategicLevels, getCommentCounts } from '../actions'
 import RequestsFeed from '@/components/RequestsFeed'
 
 export default async function RequestsPage() {
@@ -7,6 +7,7 @@ export default async function RequestsPage() {
     getFeatureRequests(),
     getStrategicLevels(),
   ])
+  const commentCounts = await getCommentCounts(requests.map((r) => r.id))
 
   return (
     <main className="min-h-screen bg-white p-8 max-w-3xl mx-auto">
@@ -17,7 +18,7 @@ export default async function RequestsPage() {
         Submit structured requests with customer evidence. The product team reviews every submission.
       </p>
       <Suspense>
-        <RequestsFeed initialRequests={requests} strategicLevels={levels} />
+        <RequestsFeed initialRequests={requests} strategicLevels={levels} initialCommentCounts={commentCounts} />
       </Suspense>
     </main>
   )

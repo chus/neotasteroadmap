@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { CRITERION_CONFIG, COLUMNS } from '@/lib/constants'
+import { CRITERION_CONFIG, COLUMNS, EFFORT_CONFIG } from '@/lib/constants'
 import type { Initiative, StrategicLevel, Criterion, Column } from '@/types'
 
 interface Props {
@@ -15,6 +15,7 @@ interface Props {
     criterion: Criterion
     criterion_secondary: Criterion | null
     dep_note: string
+    effort?: string | null
     column?: Column
   }) => void
   onDelete?: () => void
@@ -29,6 +30,7 @@ export default function InitiativeModal({ initiative, defaultColumn, strategicLe
     criterion: initiative?.criterion ?? ('execution_ready' as Criterion),
     criterion_secondary: initiative?.criterion_secondary ?? ('' as string),
     dep_note: initiative?.dep_note ?? '',
+    effort: initiative?.effort ?? '',
     column: initiative?.column ?? defaultColumn ?? ('' as string),
   })
 
@@ -55,6 +57,7 @@ export default function InitiativeModal({ initiative, defaultColumn, strategicLe
       criterion: form.criterion,
       criterion_secondary: form.criterion_secondary ? (form.criterion_secondary as Criterion) : null,
       dep_note: form.dep_note,
+      effort: form.effort || null,
       column: form.column ? (form.column as Column) : defaultColumn,
     })
   }
@@ -150,6 +153,21 @@ export default function InitiativeModal({ initiative, defaultColumn, strategicLe
               ))}
             </select>
           </div>
+        </div>
+
+        <div>
+          <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Effort estimate</label>
+          <select
+            className="mt-1 w-full text-[12px] border border-neutral-300 rounded-lg px-3 py-2 outline-none"
+            value={form.effort}
+            onChange={(e) => setForm({ ...form, effort: e.target.value })}
+          >
+            <option value="">None</option>
+            {Object.entries(EFFORT_CONFIG).map(([k, v]) => (
+              <option key={k} value={k}>{v.label}</option>
+            ))}
+          </select>
+          <p className="text-[10px] text-neutral-400 mt-0.5">XS = hours, S = days, M = 1–2 weeks, L = 3–4 weeks, XL = 4+ weeks.</p>
         </div>
 
         <div>

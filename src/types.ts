@@ -22,6 +22,8 @@ export interface Initiative {
   column: Column
   position: number
   dep_note: string
+  effort: string | null
+  is_public: boolean
   created_at: Date
 }
 
@@ -37,9 +39,22 @@ export interface FeatureRequest {
   customer_evidence: string
   submitter_name: string
   submitter_role: string
+  submitter_email: string
   status: RequestStatus
   admin_note: string
   roadmap_initiative_id: string | null
   vote_count: number
   created_at: Date
+}
+
+export interface RequestComment {
+  id: string
+  request_id: string
+  parent_id: string | null
+  author_name: string
+  author_role: string
+  body: string
+  is_team_response: boolean
+  created_at: Date
+  replies?: RequestComment[]
 }

@@ -181,6 +181,8 @@ export default function Board({ initialData, initialLevels }: Props) {
     criterion: Criterion
     criterion_secondary: Criterion | null
     dep_note: string
+    effort?: string | null
+    is_public?: boolean
     column?: Column
   }) {
     if (!selectedInitiative) return
@@ -221,6 +223,7 @@ export default function Board({ initialData, initialLevels }: Props) {
     criterion: Criterion
     criterion_secondary: Criterion | null
     dep_note: string
+    effort?: string | null
     column?: Column
   }) {
     const col = data.column ?? addingToColumn ?? 'now'
@@ -235,6 +238,7 @@ export default function Board({ initialData, initialLevels }: Props) {
         column: col,
         position: colItems.length,
         dep_note: data.dep_note,
+        effort: data.effort,
       })
       setItems((prev) => [...prev, newInit])
     } catch {

@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { CRITERION_CONFIG } from '@/lib/constants'
+import { CRITERION_CONFIG, EFFORT_CONFIG } from '@/lib/constants'
 import type { Initiative, Criterion } from '@/types'
 
 interface Props {
@@ -192,6 +192,30 @@ export default function InitiativeCard({ initiative, dimmed, onEdit, onDelete, o
           <p className="text-[11px] italic text-neutral-400 mt-1">
             <span className="not-italic">→</span> {initiative.dep_note}
           </p>
+        )}
+
+        {initiative.is_public && (
+          <div className="absolute left-2 bottom-2">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="2" y1="12" x2="22" y2="12" />
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+            </svg>
+          </div>
+        )}
+
+        {initiative.effort && EFFORT_CONFIG[initiative.effort] && (
+          <div className="absolute right-2 bottom-2">
+            <span
+              className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
+              style={{
+                backgroundColor: EFFORT_CONFIG[initiative.effort].color + '1a',
+                color: EFFORT_CONFIG[initiative.effort].color,
+              }}
+            >
+              {EFFORT_CONFIG[initiative.effort].label}
+            </span>
+          </div>
         )}
       </div>
     </div>

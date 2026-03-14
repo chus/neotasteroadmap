@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { voteOnRequest } from '@/app/actions'
+import CommentThread from './CommentThread'
 import type { FeatureRequest, RequestStatus } from '@/types'
 
 const STATUS_COLORS: Record<RequestStatus, { bg: string; text: string; label: string }> = {
@@ -29,9 +30,10 @@ interface Props {
   votedIds: Set<string>
   onVoted: (id: string) => void
   onPromote: (request: FeatureRequest) => void
+  commentCount?: number
 }
 
-export default function RequestCard({ request, isAdmin, votedIds, onVoted, onPromote }: Props) {
+export default function RequestCard({ request, isAdmin, votedIds, onVoted, onPromote, commentCount = 0 }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [voteCount, setVoteCount] = useState(request.vote_count)
   const [voting, setVoting] = useState(false)
@@ -105,6 +107,14 @@ export default function RequestCard({ request, isAdmin, votedIds, onVoted, onPro
             <span className="text-[11px] text-neutral-400">
               {timeAgo(request.created_at)}
             </span>
+            {commentCount > 0 && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-neutral-400">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+                {commentCount}
+              </span>
+            )}
           </div>
 
           {expanded && (
@@ -147,6 +157,8 @@ export default function RequestCard({ request, isAdmin, votedIds, onVoted, onPro
                   Promote to roadmap
                 </button>
               )}
+
+              <CommentThread requestId={request.id} isAdmin={isAdmin} />
             </div>
           )}
         </div>

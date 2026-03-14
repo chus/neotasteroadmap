@@ -1,6 +1,6 @@
 'use client'
 
-import { COLUMNS, CRITERION_CONFIG } from '@/lib/constants'
+import { COLUMNS, CRITERION_CONFIG, EFFORT_CONFIG } from '@/lib/constants'
 import type { Initiative, StrategicLevel, FeatureRequest, Criterion } from '@/types'
 
 const COLUMN_COLORS: Record<string, string> = {
@@ -98,6 +98,21 @@ function generateInsights(items: Initiative[], levels: StrategicLevel[], request
     insights.push(`${openRequests} open feature request${openRequests === 1 ? '' : 's'} awaiting review.`)
   }
 
+  // Effort insights
+  const withEffort = items.filter((i) => i.effort)
+  if (withEffort.length === 0 && total > 0) {
+    insights.push('No effort estimates have been added yet. Adding them unlocks capacity insights.')
+  } else if (withEffort.length > 0) {
+    const largeInNow = items.filter((i) => i.column === 'now' && (i.effort === 'l' || i.effort === 'xl')).length
+    if (largeInNow > 3) {
+      insights.push(`Heavy lifting is concentrated in Now — ${largeInNow} large initiatives are in flight simultaneously.`)
+    }
+    const smallCount = withEffort.filter((i) => i.effort === 'xs' || i.effort === 's').length
+    if (withEffort.length > 0 && smallCount / withEffort.length > 0.6) {
+      insights.push('The board skews toward smaller items. Check whether large strategic bets are being avoided.')
+    }
+  }
+
   return insights.length > 0 ? insights : ['Roadmap looks balanced. No bottlenecks detected.']
 }
 
@@ -179,6 +194,70 @@ export default function StatsPage({ initiatives, levels, requests }: Props) {
             <Bar key={c.key} label={c.label} count={c.count} total={total} color={c.border} />
           ))}
         </div>
+      </section>
+
+      {/* Effort distribution */}
+      <section className="mb-8">
+        <h2 className="text-[14px] font-semibold text-neutral-800 mb-1">Effort distribution</h2>
+        <p className="text-[12px] text-neutral-400 mb-4">Based on initiatives with an effort estimate set.</p>
+        {(() => {
+          const effortKeys = Object.keys(EFFORT_CONFIG)
+          const withEffort = initiatives.filter((i) => i.effort)
+          const effortTotal = withEffort.length
+          const effortCounts = effortKeys.map((k) => ({
+            key: k,
+            ...EFFORT_CONFIG[k],
+            count: initiatives.filter((i) => i.effort === k).length,
+          }))
+          const activeColumns = COLUMNS.filter((c) => c.id !== 'parked')
+
+          return (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <div className="space-y-2">
+                  {effortCounts.map((e) => (
+                    <Bar key={e.key} label={e.label} count={e.count} total={effortTotal || 1} color={e.color} />
+                  ))}
+                </div>
+                <p className="text-[11px] text-neutral-400 mt-2">
+                  {total - effortTotal} of {total} initiatives have no effort estimate set.
+                </p>
+              </div>
+              <div>
+                <table className="w-full text-[12px]">
+                  <thead>
+                    <tr className="text-[10px] uppercase tracking-wide text-neutral-400 border-b border-neutral-200">
+                      <th className="py-2 text-left font-medium">Effort</th>
+                      {activeColumns.map((c) => (
+                        <th key={c.id} className="py-2 text-center font-medium">{c.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {effortKeys.map((ek) => (
+                      <tr key={ek} className="border-b border-neutral-100">
+                        <td className="py-2 font-medium text-neutral-600">{EFFORT_CONFIG[ek].label}</td>
+                        {activeColumns.map((c) => {
+                          const count = initiatives.filter((i) => i.effort === ek && i.column === c.id).length
+                          const isRisk = (ek === 'l' || ek === 'xl') && c.id === 'now' && count > 0
+                          return (
+                            <td
+                              key={c.id}
+                              className="py-2 text-center text-neutral-600"
+                              style={isRisk ? { backgroundColor: '#fef3c7' } : undefined}
+                            >
+                              {count}
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        })()}
       </section>
 
       {/* Feature requests overview */}
