@@ -110,36 +110,58 @@ export default function InitiativeCard({ initiative, dimmed, onEdit, onDelete, o
     setMenuOpen(!menuOpen)
   }, [menuOpen])
 
+  const hasBottomRow = initiative.is_public || initiative.linear_project_id || initiative.target_month || initiative.effort
+
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="group relative rounded-lg border border-neutral-200 bg-white overflow-hidden cursor-pointer"
+      className="group relative rounded-lg bg-white cursor-pointer"
       onClick={() => onClick(initiative)}
       {...attributes}
     >
-      <div className="absolute left-0 top-0 bottom-0 w-1" style={{ backgroundColor: config.border }} />
-      <div className="p-3 pl-4">
-        <div
-          className="absolute left-1 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing px-0.5 text-neutral-400 text-[12px]"
-          {...listeners}
-          onClick={(e) => e.stopPropagation()}
-        >
-          ⠿
+      {/* Drag handle — only absolute element besides dropdown */}
+      <div
+        className="absolute -left-0.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing px-0.5 text-neutral-400 text-[12px] z-10"
+        {...listeners}
+        onClick={(e) => e.stopPropagation()}
+      >
+        ⠿
+      </div>
+
+      {/* Card body with left criterion border */}
+      <div
+        className="flex flex-col gap-1.5 p-3 pl-4 rounded-lg border border-neutral-200"
+        style={{ borderLeft: `3px solid ${config.border}` }}
+      >
+        {/* Top row: title + track pill + three-dot menu */}
+        <div className="flex items-start justify-between gap-2">
+          <span className="text-[13px] font-medium leading-tight text-neutral-800 flex-1">
+            {initiative.title}
+          </span>
+          <div className="flex items-center gap-1 shrink-0">
+            {initiative.strategic_level_name && (
+              <span
+                className="text-[9px] font-medium rounded-full px-1.5 py-0.5 border"
+                style={{
+                  color: initiative.strategic_level_color,
+                  borderColor: initiative.strategic_level_color + '40',
+                }}
+              >
+                {initiative.strategic_level_name}
+              </span>
+            )}
+            <button
+              ref={triggerRef}
+              onClick={handleToggleMenu}
+              className="text-neutral-400 hover:text-neutral-600 text-[14px] leading-none px-1 opacity-0 group-hover:opacity-100"
+            >
+              ···
+            </button>
+          </div>
         </div>
 
-        {/* Three-dot trigger */}
-        <div className="absolute right-1.5 top-1.5 opacity-0 group-hover:opacity-100">
-          <button
-            ref={triggerRef}
-            onClick={handleToggleMenu}
-            className="text-neutral-400 hover:text-neutral-600 text-[14px] leading-none px-1"
-          >
-            ···
-          </button>
-        </div>
-
-        {/* Fixed dropdown via portal */}
+        {/* Dropdown via portal */}
         {menuOpen && triggerRect && (
           <CardDropdown
             triggerRect={triggerRect}
@@ -149,29 +171,8 @@ export default function InitiativeCard({ initiative, dimmed, onEdit, onDelete, o
           />
         )}
 
-        {/* Strategic level pill top-right */}
-        <div className="flex items-start justify-between gap-2">
-          <span className="text-[13px] font-medium leading-tight text-neutral-800">
-            {initiative.title}
-          </span>
-          {initiative.strategic_level_name && (
-            <span
-              className="shrink-0 text-[9px] font-medium rounded-full px-1.5 py-0.5 mt-0.5 border"
-              style={{
-                color: initiative.strategic_level_color,
-                borderColor: initiative.strategic_level_color + '40',
-              }}
-            >
-              {initiative.strategic_level_name}
-            </span>
-          )}
-        </div>
-
-        {initiative.subtitle && (
-          <p className="text-[12px] text-neutral-500 mt-0.5">{initiative.subtitle}</p>
-        )}
-
-        <div className="flex items-center gap-1.5 mt-1.5">
+        {/* Criteria badges row */}
+        <div className="flex items-center gap-1.5 flex-wrap">
           <span
             className="text-[10px] font-medium px-1.5 py-0.5 rounded"
             style={{ backgroundColor: config.badge, color: config.color }}
@@ -180,7 +181,7 @@ export default function InitiativeCard({ initiative, dimmed, onEdit, onDelete, o
           </span>
           {secondaryConfig && (
             <span
-              className="text-[10px] font-medium px-1.5 py-0.5 rounded opacity-80"
+              className="text-[10px] font-medium px-1.5 py-0.5 rounded opacity-75"
               style={{ backgroundColor: secondaryConfig.badge, color: secondaryConfig.color }}
             >
               {secondaryConfig.label}
@@ -188,49 +189,56 @@ export default function InitiativeCard({ initiative, dimmed, onEdit, onDelete, o
           )}
         </div>
 
+        {/* Dep note row (conditional) */}
         {initiative.dep_note && (
-          <p className="text-[11px] italic text-neutral-400 mt-1">
+          <p className="text-[11px] italic text-neutral-400 truncate">
             <span className="not-italic">→</span> {initiative.dep_note}
           </p>
         )}
 
-        <div className="absolute left-2 bottom-2 flex items-center gap-1.5">
-          {initiative.is_public && (
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <line x1="2" y1="12" x2="22" y2="12" />
-              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-            </svg>
-          )}
-          {initiative.target_month && MONTH_SHORT[initiative.target_month] && (
-            <span className="text-[9px] font-medium text-neutral-400 bg-neutral-100 rounded px-1 py-0.5">
-              {MONTH_SHORT[initiative.target_month]}
-            </span>
-          )}
-        </div>
-
-        <div className="absolute right-2 bottom-2 flex items-center gap-1">
-          {initiative.effort && EFFORT_CONFIG[initiative.effort] && (
-            <span
-              className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
-              style={{
-                backgroundColor: EFFORT_CONFIG[initiative.effort].color + '1a',
-                color: EFFORT_CONFIG[initiative.effort].color,
-              }}
-            >
-              {EFFORT_CONFIG[initiative.effort].label}
-            </span>
-          )}
-          {initiative.linear_project_id && (
-            <span
-              className="text-[10px] font-semibold rounded px-[5px] py-[2px]"
-              style={{ backgroundColor: '#5E6AD226', color: '#5E6AD2' }}
-              title={`Linked to Linear${initiative.linear_synced_at ? ` — last synced ${new Date(initiative.linear_synced_at).toLocaleString()}` : ''}`}
-            >
-              L
-            </span>
-          )}
-        </div>
+        {/* Bottom row: metadata badges */}
+        {hasBottomRow && (
+          <div className="flex items-center justify-between mt-0.5">
+            <div className="flex items-center gap-1.5">
+              {initiative.is_public && (
+                <span title="Visible on public roadmap">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="2" y1="12" x2="22" y2="12" />
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                  </svg>
+                </span>
+              )}
+              {initiative.linear_project_id && (
+                <span
+                  className="text-[10px] font-semibold rounded px-1.5 py-0.5"
+                  style={{ backgroundColor: '#5E6AD226', color: '#5E6AD2' }}
+                  title={`Linked to Linear${initiative.linear_synced_at ? ` — last synced ${new Date(initiative.linear_synced_at).toLocaleString()}` : ''}`}
+                >
+                  L
+                </span>
+              )}
+              {initiative.target_month && MONTH_SHORT[initiative.target_month] && (
+                <span className="text-[10px] font-medium text-neutral-400 bg-neutral-100 rounded px-1.5 py-0.5">
+                  {MONTH_SHORT[initiative.target_month]}
+                </span>
+              )}
+            </div>
+            <div>
+              {initiative.effort && EFFORT_CONFIG[initiative.effort] && (
+                <span
+                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                  style={{
+                    backgroundColor: EFFORT_CONFIG[initiative.effort].color + '1a',
+                    color: EFFORT_CONFIG[initiative.effort].color,
+                  }}
+                >
+                  {EFFORT_CONFIG[initiative.effort].label}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
