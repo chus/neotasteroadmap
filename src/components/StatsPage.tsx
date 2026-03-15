@@ -1,6 +1,6 @@
 'use client'
 
-import { COLUMNS, CRITERION_CONFIG, EFFORT_CONFIG } from '@/lib/constants'
+import { COLUMNS, CRITERION_CONFIG, EFFORT_CONFIG, MONTHS_2026, MONTH_SHORT } from '@/lib/constants'
 import type { Initiative, StrategicLevel, FeatureRequest, Criterion } from '@/types'
 
 const COLUMN_COLORS: Record<string, string> = {
@@ -255,6 +255,39 @@ export default function StatsPage({ initiatives, levels, requests }: Props) {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )
+        })()}
+      </section>
+
+      {/* Monthly distribution */}
+      <section className="mb-8">
+        <h2 className="text-[14px] font-semibold text-neutral-800 mb-1">Target month distribution</h2>
+        <p className="text-[12px] text-neutral-400 mb-4">Based on initiatives with a target month set.</p>
+        {(() => {
+          const withMonth = initiatives.filter((i) => i.target_month)
+          const monthTotal = withMonth.length
+          const monthCounts = MONTHS_2026.map((m) => ({
+            ...m,
+            count: initiatives.filter((i) => i.target_month === m.value).length,
+          }))
+          const noMonth = total - monthTotal
+
+          return (
+            <div>
+              <div className="space-y-2">
+                {monthCounts.filter((m) => m.count > 0).map((m) => (
+                  <Bar key={m.value} label={MONTH_SHORT[m.value] ?? m.label} count={m.count} total={monthTotal || 1} color="#50E88A" />
+                ))}
+                {monthTotal === 0 && (
+                  <p className="text-[12px] text-neutral-400 italic">No initiatives have a target month set yet.</p>
+                )}
+              </div>
+              {monthTotal > 0 && (
+                <p className="text-[11px] text-neutral-400 mt-2">
+                  {noMonth} of {total} initiatives have no target month set.
+                </p>
+              )}
             </div>
           )
         })()}

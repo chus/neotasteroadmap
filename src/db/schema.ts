@@ -20,7 +20,13 @@ export const initiatives = pgTable('initiatives', {
   position: integer('position').notNull().default(0),
   dep_note: text('dep_note').default(''),
   effort: text('effort'),
+  target_month: text('target_month'),
   is_public: boolean('is_public').notNull().default(false),
+  linear_project_id: text('linear_project_id'),
+  linear_url: text('linear_url'),
+  linear_state: text('linear_state'),
+  linear_synced_at: timestamp('linear_synced_at'),
+  linear_sync_enabled: boolean('linear_sync_enabled').notNull().default(false),
   created_at: timestamp('created_at').defaultNow(),
 })
 
@@ -59,6 +65,18 @@ export const requestComments = pgTable('request_comments', {
   author_role: text('author_role').default(''),
   body: text('body').notNull(),
   is_team_response: boolean('is_team_response').default(false),
+  created_at: timestamp('created_at').defaultNow(),
+})
+
+export const linearSyncLog = pgTable('linear_sync_log', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  initiative_id: uuid('initiative_id').notNull().references(() => initiatives.id, { onDelete: 'cascade' }),
+  initiative_title: text('initiative_title').notNull(),
+  direction: text('direction').notNull(),
+  status: text('status').notNull(),
+  linear_project_id: text('linear_project_id'),
+  changes: text('changes'),
+  error_message: text('error_message'),
   created_at: timestamp('created_at').defaultNow(),
 })
 

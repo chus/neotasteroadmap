@@ -2,6 +2,8 @@ import { Suspense } from 'react'
 import { getFeatureRequests, getStrategicLevels, getCommentCounts } from '../actions'
 import RequestsFeed from '@/components/RequestsFeed'
 
+export const dynamic = 'force-dynamic'
+
 export default async function RequestsPage() {
   const [requests, levels] = await Promise.all([
     getFeatureRequests(),

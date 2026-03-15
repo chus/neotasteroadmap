@@ -1,6 +1,8 @@
 import { getInitiatives, getStrategicLevels } from './actions'
 import Board from '@/components/Board'
 
+export const dynamic = 'force-dynamic'
+
 export default async function Home() {
   const [initiatives, levels] = await Promise.all([
     getInitiatives(),

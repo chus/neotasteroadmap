@@ -22,3 +22,25 @@ export const EFFORT_CONFIG: Record<string, { label: string; color: string }> = {
   l:  { label: 'L',  color: '#BA7517' },
   xl: { label: 'XL', color: '#D85A30' },
 }
+
+export const MONTHS_2026: { value: string; label: string }[] = [
+  { value: '2026-01', label: 'January 2026' },
+  { value: '2026-02', label: 'February 2026' },
+  { value: '2026-03', label: 'March 2026' },
+  { value: '2026-04', label: 'April 2026' },
+  { value: '2026-05', label: 'May 2026' },
+  { value: '2026-06', label: 'June 2026' },
+  { value: '2026-07', label: 'July 2026' },
+  { value: '2026-08', label: 'August 2026' },
+  { value: '2026-09', label: 'September 2026' },
+  { value: '2026-10', label: 'October 2026' },
+  { value: '2026-11', label: 'November 2026' },
+  { value: '2026-12', label: 'December 2026' },
+]
+
+export const MONTH_SHORT: Record<string, string> = {
+  '2026-01': 'Jan', '2026-02': 'Feb', '2026-03': 'Mar',
+  '2026-04': 'Apr', '2026-05': 'May', '2026-06': 'Jun',
+  '2026-07': 'Jul', '2026-08': 'Aug', '2026-09': 'Sep',
+  '2026-10': 'Oct', '2026-11': 'Nov', '2026-12': 'Dec',
+}

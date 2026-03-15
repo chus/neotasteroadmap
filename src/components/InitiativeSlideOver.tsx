@@ -1,9 +1,21 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { CRITERION_CONFIG, COLUMNS, EFFORT_CONFIG } from '@/lib/constants'
-import { getLinkedRequest } from '@/app/actions'
-import type { Initiative, StrategicLevel, FeatureRequest, Criterion, Column } from '@/types'
+import { CRITERION_CONFIG, COLUMNS, EFFORT_CONFIG, MONTHS_2026, MONTH_SHORT } from '@/lib/constants'
+import { getLinkedRequest, pushToLinear, pullFromLinear, unlinkFromLinear, getLinearSyncLog } from '@/app/actions'
+import type { Initiative, StrategicLevel, FeatureRequest, Criterion, Column, LinearSyncLogEntry } from '@/types'
+
+function timeAgo(date: Date): string {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+  if (seconds < 60) return 'just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days}d ago`
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
 
 interface Props {
   initiative: Initiative
@@ -16,6 +28,7 @@ interface Props {
     criterion_secondary: Criterion | null
     dep_note: string
     effort?: string | null
+    target_month?: string | null
     is_public?: boolean
     column?: Column
   }) => void
@@ -29,6 +42,18 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
   const [loadingLink, setLoadingLink] = useState(true)
   const backdropRef = useRef<HTMLDivElement>(null)
 
+  // Linear state
+  const [linearLinked, setLinearLinked] = useState(!!initiative.linear_project_id)
+  const [linearUrl, setLinearUrl] = useState(initiative.linear_url)
+  const [linearState, setLinearState] = useState(initiative.linear_state)
+  const [linearSyncedAt, setLinearSyncedAt] = useState(initiative.linear_synced_at)
+  const [linearPushing, setLinearPushing] = useState(false)
+  const [linearPulling, setLinearPulling] = useState(false)
+  const [linearError, setLinearError] = useState<string | null>(null)
+  const [linearPullChanges, setLinearPullChanges] = useState<string | null>(null)
+  const [syncLog, setSyncLog] = useState<LinearSyncLogEntry[]>([])
+  const [syncLogExpanded, setSyncLogExpanded] = useState(false)
+
   const [form, setForm] = useState({
     title: initiative.title,
     subtitle: initiative.subtitle,
@@ -37,6 +62,7 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
     criterion_secondary: initiative.criterion_secondary ?? ('' as string),
     dep_note: initiative.dep_note,
     effort: initiative.effort ?? '',
+    target_month: initiative.target_month ?? '',
     is_public: initiative.is_public,
     column: initiative.column as string,
   })
@@ -55,6 +81,12 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
       .finally(() => setLoadingLink(false))
   }, [initiative.id])
 
+  useEffect(() => {
+    if (linearLinked) {
+      getLinearSyncLog(initiative.id).then(setSyncLog)
+    }
+  }, [initiative.id, linearLinked])
+
   function handleBackdropClick(e: React.MouseEvent) {
     if (e.target === backdropRef.current) onClose()
   }
@@ -69,6 +101,7 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
       criterion_secondary: form.criterion_secondary ? (form.criterion_secondary as Criterion) : null,
       dep_note: form.dep_note,
       effort: form.effort || null,
+      target_month: form.target_month || null,
       is_public: form.is_public,
       column: form.column as Column,
     })
@@ -179,6 +212,30 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                   <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Dependency note</label>
                   <input className="mt-1 w-full text-[12px] border border-neutral-300 rounded-lg px-3 py-2 outline-none focus:border-neutral-500" value={form.dep_note} onChange={(e) => setForm({ ...form, dep_note: e.target.value })} />
                 </div>
+              </div>
+              <div>
+                <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Target month</label>
+                <select className="mt-1 w-full text-[12px] border border-neutral-300 rounded-lg px-3 py-2 outline-none" value={form.target_month} onChange={(e) => setForm({ ...form, target_month: e.target.value })}>
+                  <option value="">None</option>
+                  {MONTHS_2026.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+                {(() => {
+                  if (!form.target_month) return null
+                  const month = parseInt(form.target_month.split('-')[1])
+                  const colQuarters: Record<string, number[]> = {
+                    now: [1,2,3,4,5,6], next: [4,5,6,7,8,9],
+                    later: [7,8,9,10,11,12], parked: [],
+                  }
+                  const allowed = colQuarters[form.column] ?? []
+                  if (form.column === 'parked') {
+                    return <p className="text-[10px] text-amber-600 mt-1">Parked items typically don't have a target month.</p>
+                  }
+                  if (allowed.length > 0 && !allowed.includes(month)) {
+                    const colLabel = COLUMNS.find((c) => c.id === form.column)?.label ?? form.column
+                    return <p className="text-[10px] text-amber-600 mt-1">This month falls outside the typical range for the {colLabel} column.</p>
+                  }
+                  return null
+                })()}
               </div>
               <div className="flex items-center justify-between">
                 <div>
@@ -294,6 +351,12 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                   <dd className="text-neutral-600">
                     {columnLabel}{columnSublabel ? ` (${columnSublabel})` : ''}
                   </dd>
+                  <dt className="text-neutral-400">Target month</dt>
+                  <dd className="text-neutral-600">
+                    {initiative.target_month && MONTHS_2026.find((m) => m.value === initiative.target_month)
+                      ? MONTHS_2026.find((m) => m.value === initiative.target_month)!.label
+                      : '—'}
+                  </dd>
                   <dt className="text-neutral-400">Effort</dt>
                   <dd className="text-neutral-600">
                     {initiative.effort && EFFORT_CONFIG[initiative.effort]
@@ -309,6 +372,169 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                     </>
                   )}
                 </dl>
+              </section>
+
+              <hr className="my-5" style={{ borderColor: '#f0f0f0' }} />
+
+              {/* Linear */}
+              <section>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide">Linear</div>
+                  {linearLinked && <span className="w-1.5 h-1.5 rounded-full bg-green-500" />}
+                </div>
+
+                {!linearLinked ? (
+                  <div>
+                    <p className="text-[12px] text-neutral-400 mb-3">Not linked to a Linear project.</p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={async () => {
+                          setLinearPushing(true)
+                          setLinearError(null)
+                          const result = await pushToLinear(initiative.id)
+                          setLinearPushing(false)
+                          if (result.success) {
+                            setLinearLinked(true)
+                            setLinearUrl(result.linearUrl ?? null)
+                            setLinearSyncedAt(new Date())
+                            getLinearSyncLog(initiative.id).then(setSyncLog)
+                          } else {
+                            setLinearError(result.error ?? 'Failed to push')
+                          }
+                        }}
+                        disabled={linearPushing}
+                        className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
+                      >
+                        {linearPushing ? 'Pushing…' : 'Push to Linear'}
+                      </button>
+                    </div>
+                    {linearError && (
+                      <p className="text-[11px] text-red-500 mt-2">{linearError}</p>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {/* Project link */}
+                    <div className="flex items-center justify-between text-[12px]">
+                      <span className="text-neutral-400">Project</span>
+                      {linearUrl ? (
+                        <a href={linearUrl} target="_blank" rel="noopener noreferrer" className="text-[#5E6AD2] hover:underline flex items-center gap-1">
+                          {initiative.title}
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+                          </svg>
+                        </a>
+                      ) : (
+                        <span className="text-neutral-600">Linked</span>
+                      )}
+                    </div>
+
+                    {/* Linear state */}
+                    {linearState && (
+                      <div className="flex items-center justify-between text-[12px]">
+                        <span className="text-neutral-400">Linear state</span>
+                        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600">
+                          {linearState}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Last synced */}
+                    <div className="flex items-center justify-between text-[12px]">
+                      <span className="text-neutral-400">Last synced</span>
+                      <span className="text-neutral-600" title={linearSyncedAt ? new Date(linearSyncedAt).toLocaleString() : ''}>
+                        {linearSyncedAt ? timeAgo(new Date(linearSyncedAt)) : '—'}
+                      </span>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={async () => {
+                          setLinearPushing(true)
+                          setLinearError(null)
+                          const result = await pushToLinear(initiative.id)
+                          setLinearPushing(false)
+                          if (result.success) {
+                            setLinearSyncedAt(new Date())
+                            getLinearSyncLog(initiative.id).then(setSyncLog)
+                          } else {
+                            setLinearError(result.error ?? 'Push failed')
+                          }
+                        }}
+                        disabled={linearPushing}
+                        className="text-[11px] font-medium px-2.5 py-1 rounded-lg border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
+                      >
+                        {linearPushing ? 'Pushing…' : 'Push changes'}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          setLinearPulling(true)
+                          setLinearError(null)
+                          setLinearPullChanges(null)
+                          const result = await pullFromLinear(initiative.id)
+                          setLinearPulling(false)
+                          if (result.success) {
+                            setLinearSyncedAt(new Date())
+                            setLinearPullChanges(result.changes ?? null)
+                            getLinearSyncLog(initiative.id).then(setSyncLog)
+                          } else {
+                            setLinearError(result.error ?? 'Pull failed')
+                          }
+                        }}
+                        disabled={linearPulling}
+                        className="text-[11px] font-medium px-2.5 py-1 rounded-lg border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
+                      >
+                        {linearPulling ? 'Pulling…' : 'Pull from Linear'}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!confirm('Unlink this initiative from Linear? The Linear project will not be deleted.')) return
+                          await unlinkFromLinear(initiative.id)
+                          setLinearLinked(false)
+                          setLinearUrl(null)
+                          setLinearState(null)
+                          setLinearSyncedAt(null)
+                          setSyncLog([])
+                        }}
+                        className="text-[11px] text-red-500 hover:text-red-700 ml-auto"
+                      >
+                        Unlink
+                      </button>
+                    </div>
+
+                    {linearPullChanges && (
+                      <p className="text-[11px] text-neutral-400 italic">{linearPullChanges}</p>
+                    )}
+                    {linearError && (
+                      <p className="text-[11px] text-red-500">{linearError}</p>
+                    )}
+
+                    {/* Sync log */}
+                    {syncLog.length > 0 && (
+                      <div className="pt-2">
+                        <div className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-1.5">Sync history</div>
+                        <div className="space-y-1">
+                          {(syncLogExpanded ? syncLog : syncLog.slice(0, 3)).map((entry) => (
+                            <div key={entry.id} className="flex items-center gap-2 text-[11px]">
+                              <span>{entry.direction === 'push' ? '↑' : '↓'}</span>
+                              <span className={`w-1.5 h-1.5 rounded-full ${entry.status === 'success' ? 'bg-green-500' : 'bg-red-500'}`} />
+                              <span className="text-neutral-500 truncate flex-1">
+                                {entry.changes || entry.error_message || entry.direction}
+                              </span>
+                              <span className="text-neutral-400 shrink-0">{timeAgo(new Date(entry.created_at))}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {syncLog.length > 3 && !syncLogExpanded && (
+                          <button onClick={() => setSyncLogExpanded(true)} className="text-[10px] text-neutral-400 hover:text-neutral-600 mt-1">
+                            View all ({syncLog.length})
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </section>
             </div>
           )}

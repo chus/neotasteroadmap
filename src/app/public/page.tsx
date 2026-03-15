@@ -2,6 +2,8 @@ import { getPublicInitiatives } from '../actions'
 import PublicBoard from '@/components/PublicBoard'
 import type { Metadata } from 'next'
 
+export const dynamic = 'force-dynamic'
+
 export const metadata: Metadata = {
   title: 'NeoTaste Product Roadmap',
   description: "See what NeoTaste is building, what's coming next, and what we're exploring.",

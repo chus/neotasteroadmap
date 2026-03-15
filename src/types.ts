@@ -23,7 +23,25 @@ export interface Initiative {
   position: number
   dep_note: string
   effort: string | null
+  target_month: string | null
   is_public: boolean
+  linear_project_id: string | null
+  linear_url: string | null
+  linear_state: string | null
+  linear_synced_at: Date | null
+  linear_sync_enabled: boolean
+  created_at: Date
+}
+
+export interface LinearSyncLogEntry {
+  id: string
+  initiative_id: string
+  initiative_title: string
+  direction: 'push' | 'pull'
+  status: 'success' | 'failed'
+  linear_project_id: string | null
+  changes: string | null
+  error_message: string | null
   created_at: Date
 }
 

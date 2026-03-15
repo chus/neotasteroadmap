@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { CRITERION_CONFIG, EFFORT_CONFIG } from '@/lib/constants'
+import { CRITERION_CONFIG, EFFORT_CONFIG, MONTH_SHORT } from '@/lib/constants'
 import type { Initiative, Criterion } from '@/types'
 
 interface Props {
@@ -194,18 +194,23 @@ export default function InitiativeCard({ initiative, dimmed, onEdit, onDelete, o
           </p>
         )}
 
-        {initiative.is_public && (
-          <div className="absolute left-2 bottom-2">
+        <div className="absolute left-2 bottom-2 flex items-center gap-1.5">
+          {initiative.is_public && (
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
               <line x1="2" y1="12" x2="22" y2="12" />
               <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
             </svg>
-          </div>
-        )}
+          )}
+          {initiative.target_month && MONTH_SHORT[initiative.target_month] && (
+            <span className="text-[9px] font-medium text-neutral-400 bg-neutral-100 rounded px-1 py-0.5">
+              {MONTH_SHORT[initiative.target_month]}
+            </span>
+          )}
+        </div>
 
-        {initiative.effort && EFFORT_CONFIG[initiative.effort] && (
-          <div className="absolute right-2 bottom-2">
+        <div className="absolute right-2 bottom-2 flex items-center gap-1">
+          {initiative.effort && EFFORT_CONFIG[initiative.effort] && (
             <span
               className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
               style={{
@@ -215,8 +220,17 @@ export default function InitiativeCard({ initiative, dimmed, onEdit, onDelete, o
             >
               {EFFORT_CONFIG[initiative.effort].label}
             </span>
-          </div>
-        )}
+          )}
+          {initiative.linear_project_id && (
+            <span
+              className="text-[10px] font-semibold rounded px-[5px] py-[2px]"
+              style={{ backgroundColor: '#5E6AD226', color: '#5E6AD2' }}
+              title={`Linked to Linear${initiative.linear_synced_at ? ` — last synced ${new Date(initiative.linear_synced_at).toLocaleString()}` : ''}`}
+            >
+              L
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )

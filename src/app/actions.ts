@@ -1,11 +1,11 @@
 'use server'
 
 import { db } from '@/db'
-import { initiatives, strategicLevels, featureRequests, votes, requestComments, activityLog } from '@/db/schema'
+import { initiatives, strategicLevels, featureRequests, votes, requestComments, activityLog, linearSyncLog } from '@/db/schema'
 import { eq, asc, desc, sql, isNull, ilike, or } from 'drizzle-orm'
 import { createHash } from 'crypto'
 import { headers } from 'next/headers'
-import type { Initiative, StrategicLevel, Column, FeatureRequest, RequestStatus, Criterion, RequestComment } from '@/types'
+import type { Initiative, StrategicLevel, Column, FeatureRequest, RequestStatus, Criterion, RequestComment, LinearSyncLogEntry } from '@/types'
 
 // ─── Initiatives ───
 
@@ -22,7 +22,13 @@ export async function getInitiatives(): Promise<Initiative[]> {
       position: initiatives.position,
       dep_note: initiatives.dep_note,
       effort: initiatives.effort,
+      target_month: initiatives.target_month,
       is_public: initiatives.is_public,
+      linear_project_id: initiatives.linear_project_id,
+      linear_url: initiatives.linear_url,
+      linear_state: initiatives.linear_state,
+      linear_synced_at: initiatives.linear_synced_at,
+      linear_sync_enabled: initiatives.linear_sync_enabled,
       created_at: initiatives.created_at,
       level_name: strategicLevels.name,
       level_color: strategicLevels.color,
@@ -44,7 +50,13 @@ export async function getInitiatives(): Promise<Initiative[]> {
     position: r.position,
     dep_note: r.dep_note ?? '',
     effort: r.effort ?? null,
+    target_month: r.target_month ?? null,
     is_public: r.is_public ?? false,
+    linear_project_id: r.linear_project_id ?? null,
+    linear_url: r.linear_url ?? null,
+    linear_state: r.linear_state ?? null,
+    linear_synced_at: r.linear_synced_at ?? null,
+    linear_sync_enabled: r.linear_sync_enabled ?? false,
     created_at: r.created_at ?? new Date(),
   }))
 }
@@ -84,6 +96,7 @@ export async function updateInitiative(
     column?: string
     dep_note?: string
     effort?: string | null
+    target_month?: string | null
     is_public?: boolean
   }
 ) {
@@ -100,6 +113,7 @@ export async function createInitiative(data: {
   position: number
   dep_note?: string
   effort?: string | null
+  target_month?: string | null
 }): Promise<Initiative> {
   const [row] = await db.insert(initiatives).values(data).returning()
 
@@ -130,7 +144,13 @@ export async function createInitiative(data: {
     position: row.position,
     dep_note: row.dep_note ?? '',
     effort: row.effort ?? null,
+    target_month: row.target_month ?? null,
     is_public: row.is_public ?? false,
+    linear_project_id: row.linear_project_id ?? null,
+    linear_url: row.linear_url ?? null,
+    linear_state: row.linear_state ?? null,
+    linear_synced_at: row.linear_synced_at ?? null,
+    linear_sync_enabled: row.linear_sync_enabled ?? false,
     created_at: row.created_at ?? new Date(),
   }
 }
@@ -152,7 +172,13 @@ export async function getPublicInitiatives(): Promise<Initiative[]> {
       position: initiatives.position,
       dep_note: initiatives.dep_note,
       effort: initiatives.effort,
+      target_month: initiatives.target_month,
       is_public: initiatives.is_public,
+      linear_project_id: initiatives.linear_project_id,
+      linear_url: initiatives.linear_url,
+      linear_state: initiatives.linear_state,
+      linear_synced_at: initiatives.linear_synced_at,
+      linear_sync_enabled: initiatives.linear_sync_enabled,
       created_at: initiatives.created_at,
       level_name: strategicLevels.name,
       level_color: strategicLevels.color,
@@ -175,7 +201,13 @@ export async function getPublicInitiatives(): Promise<Initiative[]> {
     position: r.position,
     dep_note: r.dep_note ?? '',
     effort: r.effort ?? null,
+    target_month: r.target_month ?? null,
     is_public: true,
+    linear_project_id: r.linear_project_id ?? null,
+    linear_url: r.linear_url ?? null,
+    linear_state: r.linear_state ?? null,
+    linear_synced_at: r.linear_synced_at ?? null,
+    linear_sync_enabled: r.linear_sync_enabled ?? false,
     created_at: r.created_at ?? new Date(),
   }))
 }
@@ -534,4 +566,346 @@ export async function deleteComment(id: string) {
   // Delete replies first, then the comment
   await db.delete(requestComments).where(eq(requestComments.parent_id, id))
   await db.delete(requestComments).where(eq(requestComments.id, id))
+}
+
+// ─── Linear Integration ───
+
+export async function pushToLinear(initiativeId: string): Promise<{ success: boolean; linearUrl?: string; error?: string }> {
+  const { isLinearConfigured, getLinearTeam, createLinearProject, updateLinearProject, COLUMN_TO_LINEAR_STATE } = await import('@/lib/linear')
+
+  if (!isLinearConfigured()) {
+    return { success: false, error: 'Linear not configured' }
+  }
+
+  try {
+    const [row] = await db
+      .select()
+      .from(initiatives)
+      .where(eq(initiatives.id, initiativeId))
+
+    if (!row) return { success: false, error: 'Initiative not found' }
+
+    const team = await getLinearTeam()
+    const state = COLUMN_TO_LINEAR_STATE[row.column] ?? 'planned'
+    const description = [row.subtitle, row.dep_note ? `Dependency: ${row.dep_note}` : ''].filter(Boolean).join('\n\n')
+    const targetDate = row.target_month ? `${row.target_month}-01` : undefined
+
+    let projectId = row.linear_project_id
+    let projectUrl = row.linear_url
+
+    if (!projectId) {
+      const project = await createLinearProject({
+        name: row.title,
+        description,
+        teamIds: [team.id],
+        state,
+        targetDate,
+      })
+      projectId = project.id
+      projectUrl = project.url
+    } else {
+      const project = await updateLinearProject(projectId, {
+        name: row.title,
+        description,
+        state,
+        targetDate: targetDate ?? null,
+      })
+      projectUrl = project.url
+    }
+
+    const now = new Date()
+    await db
+      .update(initiatives)
+      .set({
+        linear_project_id: projectId,
+        linear_url: projectUrl,
+        linear_state: state,
+        linear_synced_at: now,
+        linear_sync_enabled: true,
+      })
+      .where(eq(initiatives.id, initiativeId))
+
+    await db.insert(linearSyncLog).values({
+      initiative_id: initiativeId,
+      initiative_title: row.title,
+      direction: 'push',
+      status: 'success',
+      linear_project_id: projectId,
+      changes: JSON.stringify({ state, targetDate: targetDate ?? null }),
+    })
+
+    return { success: true, linearUrl: projectUrl ?? undefined }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+
+    // Try to log the failure
+    try {
+      await db.insert(linearSyncLog).values({
+        initiative_id: initiativeId,
+        initiative_title: '',
+        direction: 'push',
+        status: 'failed',
+        error_message: message,
+      })
+    } catch { /* ignore logging failure */ }
+
+    return { success: false, error: message }
+  }
+}
+
+export async function pullFromLinear(initiativeId: string): Promise<{ success: boolean; changes?: string; error?: string }> {
+  const { isLinearConfigured, getLinearProject, LINEAR_STATE_TO_COLUMN } = await import('@/lib/linear')
+
+  if (!isLinearConfigured()) {
+    return { success: false, error: 'Linear not configured' }
+  }
+
+  try {
+    const [row] = await db
+      .select()
+      .from(initiatives)
+      .where(eq(initiatives.id, initiativeId))
+
+    if (!row) return { success: false, error: 'Initiative not found' }
+    if (!row.linear_project_id) return { success: false, error: 'Not linked to Linear' }
+
+    const project = await getLinearProject(row.linear_project_id)
+    const changesList: string[] = []
+    const updates: Record<string, unknown> = {}
+
+    // Check column
+    const mappedColumn = LINEAR_STATE_TO_COLUMN[project.state]
+    if (mappedColumn && mappedColumn !== row.column) {
+      changesList.push(`Column: ${row.column} → ${mappedColumn}`)
+      updates.column = mappedColumn
+    }
+
+    // Check target month
+    const linearMonth = project.targetDate ? project.targetDate.substring(0, 7) : null
+    if (linearMonth !== row.target_month) {
+      changesList.push(`Target month: ${row.target_month ?? 'none'} → ${linearMonth ?? 'none'}`)
+      updates.target_month = linearMonth
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await db.update(initiatives).set(updates).where(eq(initiatives.id, initiativeId))
+
+      if (updates.column) {
+        await db.insert(activityLog).values({
+          action: 'moved',
+          entity_type: 'initiative',
+          entity_id: initiativeId,
+          metadata: JSON.stringify({ note: 'synced from Linear', from: row.column, to: updates.column }),
+        })
+      }
+    }
+
+    const now = new Date()
+    await db
+      .update(initiatives)
+      .set({
+        linear_state: project.state,
+        linear_synced_at: now,
+      })
+      .where(eq(initiatives.id, initiativeId))
+
+    const changesText = changesList.length > 0 ? changesList.join('; ') : 'No changes'
+
+    await db.insert(linearSyncLog).values({
+      initiative_id: initiativeId,
+      initiative_title: row.title,
+      direction: 'pull',
+      status: 'success',
+      linear_project_id: row.linear_project_id,
+      changes: changesText,
+    })
+
+    return { success: true, changes: changesText }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+
+    try {
+      await db.insert(linearSyncLog).values({
+        initiative_id: initiativeId,
+        initiative_title: '',
+        direction: 'pull',
+        status: 'failed',
+        error_message: message,
+      })
+    } catch { /* ignore */ }
+
+    return { success: false, error: message }
+  }
+}
+
+export async function unlinkFromLinear(initiativeId: string): Promise<{ success: boolean }> {
+  await db
+    .update(initiatives)
+    .set({
+      linear_project_id: null,
+      linear_url: null,
+      linear_state: null,
+      linear_synced_at: null,
+      linear_sync_enabled: false,
+    })
+    .where(eq(initiatives.id, initiativeId))
+
+  await db.insert(activityLog).values({
+    action: 'unlinked',
+    entity_type: 'initiative',
+    entity_id: initiativeId,
+    metadata: JSON.stringify({ note: 'Unlinked from Linear' }),
+  })
+
+  return { success: true }
+}
+
+export async function importFromLinear(
+  linearProjectId: string,
+  column: Column,
+  criterion: Criterion,
+  strategicLevelId: string
+): Promise<Initiative> {
+  const { getLinearProject } = await import('@/lib/linear')
+
+  const project = await getLinearProject(linearProjectId)
+
+  const colItems = await db
+    .select()
+    .from(initiatives)
+    .where(eq(initiatives.column, column))
+
+  const targetMonth = project.targetDate ? project.targetDate.substring(0, 7) : null
+
+  const [row] = await db
+    .insert(initiatives)
+    .values({
+      title: project.name,
+      subtitle: project.description ?? '',
+      strategic_level_id: strategicLevelId,
+      criterion,
+      column,
+      position: colItems.length,
+      target_month: targetMonth,
+      linear_project_id: project.id,
+      linear_url: project.url,
+      linear_state: project.state,
+      linear_synced_at: new Date(),
+      linear_sync_enabled: true,
+    })
+    .returning()
+
+  let levelName = ''
+  let levelColor = '#999'
+  if (strategicLevelId) {
+    const [level] = await db
+      .select()
+      .from(strategicLevels)
+      .where(eq(strategicLevels.id, strategicLevelId))
+    if (level) {
+      levelName = level.name
+      levelColor = level.color
+    }
+  }
+
+  await db.insert(activityLog).values({
+    action: 'created',
+    entity_type: 'initiative',
+    entity_id: row.id,
+    metadata: JSON.stringify({ note: 'imported from Linear', linear_project_id: project.id }),
+  })
+
+  return {
+    id: row.id,
+    title: row.title,
+    subtitle: row.subtitle ?? '',
+    strategic_level_id: row.strategic_level_id,
+    strategic_level_name: levelName,
+    strategic_level_color: levelColor,
+    criterion: row.criterion as Criterion,
+    criterion_secondary: (row.criterion_secondary as Criterion) ?? null,
+    column: row.column as Column,
+    position: row.position,
+    dep_note: row.dep_note ?? '',
+    effort: row.effort ?? null,
+    target_month: row.target_month ?? null,
+    is_public: row.is_public ?? false,
+    linear_project_id: row.linear_project_id ?? null,
+    linear_url: row.linear_url ?? null,
+    linear_state: row.linear_state ?? null,
+    linear_synced_at: row.linear_synced_at ?? null,
+    linear_sync_enabled: row.linear_sync_enabled ?? false,
+    created_at: row.created_at ?? new Date(),
+  }
+}
+
+export async function getLinearSyncLog(initiativeId: string, limit = 10): Promise<LinearSyncLogEntry[]> {
+  const rows = await db
+    .select()
+    .from(linearSyncLog)
+    .where(eq(linearSyncLog.initiative_id, initiativeId))
+    .orderBy(desc(linearSyncLog.created_at))
+    .limit(limit)
+
+  return rows.map((r) => ({
+    id: r.id,
+    initiative_id: r.initiative_id,
+    initiative_title: r.initiative_title,
+    direction: r.direction as 'push' | 'pull',
+    status: r.status as 'success' | 'failed',
+    linear_project_id: r.linear_project_id,
+    changes: r.changes,
+    error_message: r.error_message,
+    created_at: r.created_at ?? new Date(),
+  }))
+}
+
+export async function getAllLinearSyncLogs(limit = 20, offset = 0): Promise<LinearSyncLogEntry[]> {
+  const rows = await db
+    .select()
+    .from(linearSyncLog)
+    .orderBy(desc(linearSyncLog.created_at))
+    .limit(limit)
+    .offset(offset)
+
+  return rows.map((r) => ({
+    id: r.id,
+    initiative_id: r.initiative_id,
+    initiative_title: r.initiative_title,
+    direction: r.direction as 'push' | 'pull',
+    status: r.status as 'success' | 'failed',
+    linear_project_id: r.linear_project_id,
+    changes: r.changes,
+    error_message: r.error_message,
+    created_at: r.created_at ?? new Date(),
+  }))
+}
+
+export async function getLinearProjects(): Promise<{ id: string; name: string; state: string; url: string; targetDate: string | null; description: string | null }[]> {
+  const { isLinearConfigured, getLinearTeam, getLinearProjectStates } = await import('@/lib/linear')
+
+  if (!isLinearConfigured()) return []
+
+  try {
+    const team = await getLinearTeam()
+    return await getLinearProjectStates(team.id)
+  } catch {
+    return []
+  }
+}
+
+export async function testLinearConnection(): Promise<{ success: boolean; teamName?: string; error?: string }> {
+  const { isLinearConfigured, getLinearTeam } = await import('@/lib/linear')
+
+  if (!isLinearConfigured()) {
+    return { success: false, error: 'LINEAR_API_KEY not set' }
+  }
+
+  try {
+    const team = await getLinearTeam()
+    return { success: true, teamName: team.name }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return { success: false, error: message }
+  }
 }
