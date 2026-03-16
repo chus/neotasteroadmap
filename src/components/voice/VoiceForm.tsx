@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { submitFeedback } from '@/app/feedback-actions'
+import { submitFeedback, getSimilarFeedback } from '@/app/feedback-actions'
 
 const CATEGORIES = [
   { id: 'experience', label: 'Experience', desc: 'Something about using the app' },
@@ -30,6 +30,8 @@ export default function VoiceForm() {
   const [step, setStep] = useState<Step>('identity')
   const [submitting, setSubmitting] = useState(false)
   const [submittedId, setSubmittedId] = useState<string | null>(null)
+  const [similarItems, setSimilarItems] = useState<{ id: string; title: string; score: number }[]>([])
+  const [checkingSimilar, setCheckingSimilar] = useState(false)
 
   const [form, setForm] = useState({
     name: '',
@@ -54,6 +56,18 @@ export default function VoiceForm() {
 
   function canAdvanceFeedback() {
     return form.category && form.title.trim().length > 0 && form.body.trim().length > 10
+  }
+
+  async function checkSimilarAndAdvance() {
+    setCheckingSimilar(true)
+    try {
+      const similar = await getSimilarFeedback(form.title + ' ' + form.body)
+      setSimilarItems(similar)
+    } catch {
+      setSimilarItems([])
+    }
+    setCheckingSimilar(false)
+    setStep('context')
   }
 
   async function handleSubmit() {
@@ -273,11 +287,11 @@ export default function VoiceForm() {
               Back
             </button>
             <button
-              onClick={() => setStep('context')}
-              disabled={!canAdvanceFeedback()}
+              onClick={checkSimilarAndAdvance}
+              disabled={!canAdvanceFeedback() || checkingSimilar}
               className="text-[13px] font-medium px-5 py-2 rounded-lg bg-neutral-900 text-white hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              Continue
+              {checkingSimilar ? 'Checking...' : 'Continue'}
             </button>
           </div>
         </div>
@@ -338,6 +352,25 @@ export default function VoiceForm() {
               ))}
             </div>
           </div>
+
+          {/* Similar feedback */}
+          {similarItems.length > 0 && (
+            <div className="border border-blue-200 rounded-lg p-4 bg-blue-50">
+              <p className="text-[12px] font-medium text-blue-700 mb-2">
+                Similar feedback already submitted:
+              </p>
+              <div className="space-y-1">
+                {similarItems.map((item) => (
+                  <div key={item.id} className="text-[12px] text-blue-600">
+                    &ndash; {item.title}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-blue-500 mt-2">
+                You can still submit — your perspective adds valuable context.
+              </p>
+            </div>
+          )}
 
           {/* Research opt-in */}
           <div className="border border-neutral-200 rounded-lg p-4 mt-2">

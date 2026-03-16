@@ -167,6 +167,9 @@ export interface FeedbackSubmission {
   internal_note: string
   actioned_initiative_id: string | null
   research_opt_in: boolean
+  embedding: string | null
+  cluster_id: string | null
+  status_notified_at: Date | null
   created_at: Date
   reviewed_at: Date | null
   reviewed_by: string | null
@@ -183,5 +186,35 @@ export interface ResearchParticipant {
   last_contacted_at: Date | null
   contact_count: number
   opted_in_at: Date
+  created_at: Date
+}
+
+export type ClusterStatus = 'active' | 'resolved' | 'watching'
+
+export interface FeedbackCluster {
+  id: string
+  label: string
+  description: string
+  theme: string
+  submission_count: number
+  avg_sentiment: string | null
+  top_urgency: string | null
+  status: ClusterStatus
+  linked_initiative_id: string | null
+  created_at: Date
+  updated_at: Date
+}
+
+export type SessionType = 'interview' | 'survey' | 'usability_test'
+
+export interface ResearchSession {
+  id: string
+  participant_id: string
+  session_type: SessionType
+  topic: string
+  notes: string
+  conducted_by: string | null
+  conducted_at: Date | null
+  recording_url: string | null
   created_at: Date
 }

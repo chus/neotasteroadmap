@@ -177,9 +177,26 @@ export const feedbackSubmissions = pgTable('feedback_submissions', {
   internal_note: text('internal_note').default(''),
   actioned_initiative_id: uuid('actioned_initiative_id').references(() => initiatives.id),
   research_opt_in: boolean('research_opt_in').notNull().default(false),
+  embedding: text('embedding'),
+  cluster_id: uuid('cluster_id'),
+  status_notified_at: timestamp('status_notified_at'),
   created_at: timestamp('created_at').defaultNow(),
   reviewed_at: timestamp('reviewed_at'),
   reviewed_by: text('reviewed_by'),
+})
+
+export const feedbackClusters = pgTable('feedback_clusters', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  label: text('label').notNull(),
+  description: text('description').default(''),
+  theme: text('theme').default(''),
+  submission_count: integer('submission_count').default(0),
+  avg_sentiment: text('avg_sentiment'),
+  top_urgency: text('top_urgency'),
+  status: text('status').notNull().default('active'),
+  linked_initiative_id: uuid('linked_initiative_id').references(() => initiatives.id),
+  created_at: timestamp('created_at').defaultNow(),
+  updated_at: timestamp('updated_at').defaultNow(),
 })
 
 export const researchParticipants = pgTable('research_participants', {
@@ -193,5 +210,17 @@ export const researchParticipants = pgTable('research_participants', {
   last_contacted_at: timestamp('last_contacted_at'),
   contact_count: integer('contact_count').default(0),
   opted_in_at: timestamp('opted_in_at').defaultNow(),
+  created_at: timestamp('created_at').defaultNow(),
+})
+
+export const researchSessions = pgTable('research_sessions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  participant_id: uuid('participant_id').notNull().references(() => researchParticipants.id, { onDelete: 'cascade' }),
+  session_type: text('session_type').notNull().default('interview'),
+  topic: text('topic').notNull(),
+  notes: text('notes').default(''),
+  conducted_by: text('conducted_by'),
+  conducted_at: timestamp('conducted_at'),
+  recording_url: text('recording_url'),
   created_at: timestamp('created_at').defaultNow(),
 })

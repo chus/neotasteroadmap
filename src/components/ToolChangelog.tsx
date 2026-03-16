@@ -9,6 +9,42 @@ import { useState } from 'react'
 const TOOL_CHANGELOG = [
   {
     date: '2026-03-16',
+    title: 'Voice — Slack weekly digest',
+    description: 'Weekly Slack digest (Monday 8am UTC) summarizes new submissions, top clusters, sentiment breakdown, and unreviewed count. Requires SLACK_WEBHOOK_URL env variable.',
+    category: 'integration',
+  },
+  {
+    date: '2026-03-16',
+    title: 'Voice — User feedback status page',
+    description: 'Consumers can check feedback status at /voice/status by entering their email. Shows submission timeline with status progression (submitted → reviewing → actioned).',
+    category: 'portal',
+  },
+  {
+    date: '2026-03-16',
+    title: 'Voice — Research CRM',
+    description: 'Enhanced participant management at /feedback/participants with session tracking (interviews, surveys, usability tests), participant detail panel, submission history, and contact logging.',
+    category: 'portal',
+  },
+  {
+    date: '2026-03-16',
+    title: 'Voice — Status notification emails',
+    description: 'When feedback status changes (reviewing, actioned, archived), the submitter receives an email notification. Integrates with existing Resend email service.',
+    category: 'portal',
+  },
+  {
+    date: '2026-03-16',
+    title: 'Voice — AI clustering engine',
+    description: 'Feedback submissions are embedded using Voyage AI (with word-overlap fallback) and clustered by cosine similarity. Daily cron at 2am UTC. Cluster management UI in the inbox with merge, status, and initiative linking.',
+    category: 'analytics',
+  },
+  {
+    date: '2026-03-16',
+    title: 'Voice — Similar feedback detection',
+    description: 'When submitting feedback, users see similar existing submissions before confirming. Helps reduce duplicates while still allowing submissions from different perspectives.',
+    category: 'portal',
+  },
+  {
+    date: '2026-03-16',
     title: 'Voice — Consumer feedback portal',
     description: 'New consumer-facing feedback form at /voice with multi-step intake, AI triage, and research opt-in. Internal inbox at /feedback with status management, AI analysis, and initiative linking.',
     category: 'portal',

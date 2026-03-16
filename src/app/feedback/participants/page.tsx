@@ -1,5 +1,5 @@
 import { getResearchParticipants } from '@/app/feedback-actions'
-import ParticipantsList from '@/components/voice/ParticipantsList'
+import ResearchCRM from '@/components/voice/ResearchCRM'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
@@ -8,7 +8,7 @@ export default async function ParticipantsPage() {
   const participants = await getResearchParticipants()
 
   return (
-    <main className="min-h-screen bg-white p-8 max-w-4xl mx-auto">
+    <main className="min-h-screen bg-white p-8 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
           <div className="flex items-center gap-2 mb-1">
@@ -27,7 +27,7 @@ export default async function ParticipantsPage() {
         </div>
       </div>
 
-      <ParticipantsList initialParticipants={participants} />
+      <ResearchCRM initialParticipants={participants} />
     </main>
   )
 }

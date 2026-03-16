@@ -1,0 +1,241 @@
+'use client'
+
+import { useState } from 'react'
+import {
+  getClusters,
+  getClusterSubmissions,
+  updateCluster,
+  mergeClusters,
+  runClustering,
+  searchInitiativesForAction,
+} from '@/app/feedback-actions'
+import type { FeedbackCluster, FeedbackSubmission, ClusterStatus } from '@/types'
+
+const STATUS_CONFIG: Record<ClusterStatus, { label: string; color: string; bg: string }> = {
+  active:   { label: 'Active',   color: '#0C447C', bg: '#E6F1FB' },
+  resolved: { label: 'Resolved', color: '#085041', bg: '#E1F5EE' },
+  watching: { label: 'Watching', color: '#633806', bg: '#FAEEDA' },
+}
+
+const SENTIMENT_DOT: Record<string, string> = {
+  positive: '#10B981',
+  neutral: '#F59E0B',
+  negative: '#EF4444',
+}
+
+interface Props {
+  initialClusters: FeedbackCluster[]
+}
+
+export default function ClusterView({ initialClusters }: Props) {
+  const [clusters, setClusters] = useState(initialClusters)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedSubs, setExpandedSubs] = useState<FeedbackSubmission[]>([])
+  const [loadingSubs, setLoadingSubs] = useState(false)
+  const [runningClustering, setRunningClustering] = useState(false)
+  const [clusterResult, setClusterResult] = useState<string | null>(null)
+  const [linkSearchId, setLinkSearchId] = useState<string | null>(null)
+  const [linkQuery, setLinkQuery] = useState('')
+  const [linkResults, setLinkResults] = useState<{ id: string; title: string; column: string }[]>([])
+
+  async function handleExpand(clusterId: string) {
+    if (expandedId === clusterId) {
+      setExpandedId(null)
+      return
+    }
+    setExpandedId(clusterId)
+    setLoadingSubs(true)
+    const subs = await getClusterSubmissions(clusterId)
+    setExpandedSubs(subs)
+    setLoadingSubs(false)
+  }
+
+  async function handleRunClustering() {
+    setRunningClustering(true)
+    setClusterResult(null)
+    const result = await runClustering()
+    setClusterResult(`Created ${result.clustersCreated} clusters, assigned ${result.submissionsAssigned} submissions`)
+    const updated = await getClusters()
+    setClusters(updated)
+    setRunningClustering(false)
+  }
+
+  async function handleStatusChange(id: string, status: ClusterStatus) {
+    await updateCluster(id, { status })
+    setClusters(clusters.map((c) => c.id === id ? { ...c, status } : c))
+  }
+
+  async function handleLinkSearch(query: string) {
+    setLinkQuery(query)
+    if (query.trim().length > 1) {
+      const results = await searchInitiativesForAction(query)
+      setLinkResults(results)
+    } else {
+      setLinkResults([])
+    }
+  }
+
+  async function handleLinkInitiative(clusterId: string, initiativeId: string) {
+    await updateCluster(clusterId, { linked_initiative_id: initiativeId })
+    setClusters(clusters.map((c) => c.id === clusterId ? { ...c, linked_initiative_id: initiativeId } : c))
+    setLinkSearchId(null)
+    setLinkQuery('')
+  }
+
+  return (
+    <div>
+      {/* Controls */}
+      <div className="flex items-center gap-3 mb-4">
+        <button
+          onClick={handleRunClustering}
+          disabled={runningClustering}
+          className="text-[12px] font-medium px-3 py-1.5 rounded-lg bg-neutral-900 text-white hover:bg-neutral-700 disabled:opacity-40 transition-colors"
+        >
+          {runningClustering ? 'Clustering...' : 'Run clustering'}
+        </button>
+        {clusterResult && (
+          <span className="text-[11px] text-green-600">{clusterResult}</span>
+        )}
+        <span className="text-[11px] text-neutral-400 ml-auto">
+          {clusters.length} cluster{clusters.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {/* Cluster cards */}
+      <div className="space-y-2">
+        {clusters.map((cluster) => {
+          const statusCfg = STATUS_CONFIG[cluster.status] ?? STATUS_CONFIG.active
+          const isExpanded = expandedId === cluster.id
+          return (
+            <div key={cluster.id} className="border border-neutral-200 rounded-lg overflow-hidden">
+              <button
+                onClick={() => handleExpand(cluster.id)}
+                className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-neutral-50 transition-colors"
+              >
+                {cluster.avg_sentiment && (
+                  <div
+                    className="w-2 h-2 rounded-full shrink-0"
+                    style={{ backgroundColor: SENTIMENT_DOT[cluster.avg_sentiment] ?? '#999' }}
+                  />
+                )}
+                <span className="text-[13px] font-medium text-neutral-800 flex-1 truncate">
+                  {cluster.label}
+                </span>
+                <span className="text-[11px] text-neutral-400 shrink-0">
+                  {cluster.submission_count} submission{cluster.submission_count !== 1 ? 's' : ''}
+                </span>
+                {cluster.top_urgency && (
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 ${
+                    cluster.top_urgency === 'high' ? 'bg-red-100 text-red-700' :
+                    cluster.top_urgency === 'medium' ? 'bg-amber-100 text-amber-700' :
+                    'bg-neutral-100 text-neutral-500'
+                  }`}>
+                    {cluster.top_urgency}
+                  </span>
+                )}
+                <span
+                  className="text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0"
+                  style={{ backgroundColor: statusCfg.bg, color: statusCfg.color }}
+                >
+                  {statusCfg.label}
+                </span>
+                <svg
+                  width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                  className={`text-neutral-400 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+
+              {isExpanded && (
+                <div className="px-4 pb-4 border-t border-neutral-100">
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 py-3 flex-wrap">
+                    <select
+                      value={cluster.status}
+                      onChange={(e) => handleStatusChange(cluster.id, e.target.value as ClusterStatus)}
+                      className="text-[11px] font-medium px-2 py-1 rounded border border-neutral-200 bg-white outline-none"
+                    >
+                      <option value="active">Active</option>
+                      <option value="watching">Watching</option>
+                      <option value="resolved">Resolved</option>
+                    </select>
+
+                    <div className="relative">
+                      <button
+                        onClick={() => {
+                          setLinkSearchId(linkSearchId === cluster.id ? null : cluster.id)
+                          setLinkQuery('')
+                          setLinkResults([])
+                        }}
+                        className="text-[11px] font-medium px-2.5 py-1 rounded border border-neutral-200 text-neutral-600 hover:border-neutral-300"
+                      >
+                        {cluster.linked_initiative_id ? 'Re-link initiative' : 'Link initiative'}
+                      </button>
+                      {linkSearchId === cluster.id && (
+                        <div className="absolute top-full left-0 mt-1 w-[280px] bg-white border border-neutral-200 rounded-lg shadow-lg z-30 p-2">
+                          <input
+                            type="text"
+                            value={linkQuery}
+                            onChange={(e) => handleLinkSearch(e.target.value)}
+                            placeholder="Search initiatives..."
+                            className="w-full text-[12px] border border-neutral-200 rounded px-2 py-1.5 outline-none focus:border-neutral-400 mb-1"
+                            autoFocus
+                          />
+                          {linkResults.length > 0 ? (
+                            <div className="max-h-[200px] overflow-y-auto space-y-0.5">
+                              {linkResults.map((init) => (
+                                <button
+                                  key={init.id}
+                                  onClick={() => handleLinkInitiative(cluster.id, init.id)}
+                                  className="w-full text-left text-[11px] px-2 py-1.5 rounded hover:bg-neutral-50 truncate"
+                                >
+                                  {init.title} <span className="text-neutral-400">({init.column})</span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : linkQuery.trim() ? (
+                            <p className="text-[11px] text-neutral-400 px-2 py-1">No matches</p>
+                          ) : (
+                            <p className="text-[11px] text-neutral-400 px-2 py-1">Type to search...</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Submissions list */}
+                  {loadingSubs ? (
+                    <p className="text-[12px] text-neutral-400 py-4">Loading submissions...</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {expandedSubs.map((sub) => (
+                        <div key={sub.id} className="flex items-start gap-2 px-3 py-2 bg-neutral-50 rounded">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[12px] font-medium text-neutral-700 truncate">{sub.title}</p>
+                            <p className="text-[11px] text-neutral-500 line-clamp-2">{sub.body}</p>
+                          </div>
+                          <span className="text-[10px] text-neutral-400 shrink-0">
+                            {sub.name}
+                          </span>
+                        </div>
+                      ))}
+                      {expandedSubs.length === 0 && (
+                        <p className="text-[12px] text-neutral-400 italic py-2">No submissions in this cluster.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+        {clusters.length === 0 && (
+          <p className="text-[13px] text-neutral-400 text-center py-12 italic">
+            No clusters yet. Submit some feedback and run clustering to see themes emerge.
+          </p>
+        )}
+      </div>
+    </div>
+  )
+}

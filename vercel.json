@@ -9,6 +9,14 @@
     {
       "path": "/api/linear/drift?token=${DIGEST_CRON_SECRET}",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/voice/trends?token=${DIGEST_CRON_SECRET}",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/voice/slack-digest?token=${DIGEST_CRON_SECRET}",
+      "schedule": "0 8 * * 1"
     }
   ]
 }

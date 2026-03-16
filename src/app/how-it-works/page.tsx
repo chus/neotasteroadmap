@@ -246,6 +246,33 @@ export default function HowItWorks() {
         </p>
       </section>
 
+      {/* Section 9b — Voice */}
+      <section className="mb-12">
+        <h2 className="text-[16px] font-semibold text-neutral-800 mb-3">
+          Voice &mdash; consumer feedback
+        </h2>
+        <p className="text-[13px] text-neutral-600 leading-relaxed mb-3">
+          Voice is the consumer-facing feedback channel at{' '}
+          <Link href="/voice" className="text-[#5E6AD2] hover:underline">/voice</Link>.
+          Unlike the feature request portal (internal, Working Backwards format), Voice is designed for quick, unstructured consumer input &mdash; bugs, experience issues, feature ideas, pricing feedback, and anything else.
+        </p>
+        <p className="text-[13px] text-neutral-600 leading-relaxed mb-3">
+          Every submission is AI-triaged for sentiment, urgency, themes, and quality. Similar submissions are surfaced before the user submits. The internal inbox at{' '}
+          <Link href="/feedback" className="text-[#5E6AD2] hover:underline">/feedback</Link>
+          {' '}shows all submissions with AI analysis, status management, and initiative linking.
+        </p>
+        <p className="text-[13px] text-neutral-600 leading-relaxed mb-3">
+          Submissions are embedded and clustered daily (2am UTC) to surface recurring themes. Clusters can be linked to roadmap initiatives.
+        </p>
+        <p className="text-[13px] text-neutral-600 leading-relaxed">
+          Users who opt in to research are tracked in the participant CRM at{' '}
+          <Link href="/feedback/participants" className="text-[#5E6AD2] hover:underline">/feedback/participants</Link>.
+          Research sessions (interviews, surveys, usability tests) are logged per participant. Consumers can check their feedback status at{' '}
+          <Link href="/voice/status" className="text-[#5E6AD2] hover:underline">/voice/status</Link>.
+          A weekly Slack digest (Monday 8am) summarizes submissions, clusters, and sentiment.
+        </p>
+      </section>
+
       {/* Section 10 — Public views */}
       <section className="mb-12">
         <h2 className="text-[16px] font-semibold text-neutral-800 mb-4">
