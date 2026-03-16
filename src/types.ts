@@ -63,6 +63,16 @@ export interface ReactionCount {
   reacted: boolean
 }
 
+export interface DecisionEntry {
+  id: string
+  initiative_id: string
+  decision: string
+  rationale: string
+  made_by: string
+  decided_at: string
+  created_at: Date
+}
+
 export interface DigestSubscriber {
   id: string
   email: string

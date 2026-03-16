@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { CRITERION_CONFIG, COLUMNS, EFFORT_CONFIG, MONTHS_2026, MONTH_SHORT, PHASE_CONFIG } from '@/lib/constants'
 import { getLinkedRequest, pushToLinear, pullFromLinear, unlinkFromLinear, getLinearSyncLog, getChildInitiatives, getReactionsForInitiative } from '@/app/actions'
 import ReactionBar from './ReactionBar'
+import DecisionLog from './DecisionLog'
 import type { Initiative, StrategicLevel, FeatureRequest, Criterion, Column, Phase, LinearSyncLogEntry, ReactionCount } from '@/types'
 
 function timeAgo(date: Date): string {
@@ -578,6 +579,11 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                   <p className="text-[12px] text-neutral-400 italic">No linked request</p>
                 )}
               </section>
+
+              <hr className="my-5" style={{ borderColor: '#f0f0f0' }} />
+
+              {/* Decision log */}
+              <DecisionLog initiativeId={initiative.id} />
 
               <hr className="my-5" style={{ borderColor: '#f0f0f0' }} />
 

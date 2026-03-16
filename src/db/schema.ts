@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, unique, boolean } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, timestamp, unique, boolean, date } from 'drizzle-orm/pg-core'
 
 export const strategicLevels = pgTable('strategic_levels', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -112,6 +112,16 @@ export const initiativeReactions = pgTable('initiative_reactions', {
 }, (table) => [
   unique('ir_initiative_emoji_fingerprint').on(table.initiative_id, table.emoji, table.reactor_fingerprint),
 ])
+
+export const decisionLog = pgTable('decision_log', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  initiative_id: uuid('initiative_id').notNull().references(() => initiatives.id, { onDelete: 'cascade' }),
+  decision: text('decision').notNull(),
+  rationale: text('rationale').notNull(),
+  made_by: text('made_by').notNull(),
+  decided_at: date('decided_at').notNull(),
+  created_at: timestamp('created_at').defaultNow(),
+})
 
 export const digestSubscribers = pgTable('digest_subscribers', {
   id: uuid('id').defaultRandom().primaryKey(),

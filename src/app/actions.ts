@@ -1,12 +1,12 @@
 'use server'
 
 import { db } from '@/db'
-import { initiatives, strategicLevels, featureRequests, votes, requestComments, activityLog, linearSyncLog, keyAccounts, keyAccountInitiatives, initiativeReactions, digestSubscribers } from '@/db/schema'
+import { initiatives, strategicLevels, featureRequests, votes, requestComments, activityLog, linearSyncLog, keyAccounts, keyAccountInitiatives, initiativeReactions, digestSubscribers, decisionLog } from '@/db/schema'
 import { eq, asc, desc, sql, isNull, ilike, or, inArray, and } from 'drizzle-orm'
 import { createHash } from 'crypto'
 import { headers } from 'next/headers'
 import { getFingerprint } from '@/lib/fingerprint'
-import type { Initiative, StrategicLevel, Column, FeatureRequest, RequestStatus, Criterion, Phase, RequestComment, LinearSyncLogEntry, KeyAccount, KeyAccountInitiative, ReactionCount, DigestSubscriber } from '@/types'
+import type { Initiative, StrategicLevel, Column, FeatureRequest, RequestStatus, Criterion, Phase, RequestComment, LinearSyncLogEntry, KeyAccount, KeyAccountInitiative, ReactionCount, DigestSubscriber, DecisionEntry } from '@/types'
 
 // ─── Initiatives ───
 
@@ -1360,4 +1360,57 @@ export async function getWeeklyDigestData() {
     })),
     statusChangeCount: statusChanges.length,
   }
+}
+
+// ─── Decision Log ───
+
+function mapDecisionEntry(r: typeof decisionLog.$inferSelect): DecisionEntry {
+  return {
+    id: r.id,
+    initiative_id: r.initiative_id,
+    decision: r.decision,
+    rationale: r.rationale,
+    made_by: r.made_by,
+    decided_at: r.decided_at,
+    created_at: r.created_at ?? new Date(),
+  }
+}
+
+export async function getDecisionLog(initiativeId: string): Promise<DecisionEntry[]> {
+  const rows = await db
+    .select()
+    .from(decisionLog)
+    .where(eq(decisionLog.initiative_id, initiativeId))
+    .orderBy(desc(decisionLog.decided_at))
+  return rows.map(mapDecisionEntry)
+}
+
+export async function createDecisionEntry(
+  initiativeId: string,
+  data: { decision: string; rationale: string; made_by: string; decided_at: string }
+): Promise<DecisionEntry> {
+  const [row] = await db
+    .insert(decisionLog)
+    .values({ initiative_id: initiativeId, ...data })
+    .returning()
+
+  await db.insert(activityLog).values({
+    action: 'updated',
+    entity_type: 'initiative',
+    entity_id: initiativeId,
+    metadata: JSON.stringify({ field_changed: 'decision_log', value_after: data.decision }),
+  })
+
+  return mapDecisionEntry(row)
+}
+
+export async function updateDecisionEntry(
+  id: string,
+  data: { decision?: string; rationale?: string; made_by?: string; decided_at?: string }
+) {
+  await db.update(decisionLog).set(data).where(eq(decisionLog.id, id))
+}
+
+export async function deleteDecisionEntry(id: string) {
+  await db.delete(decisionLog).where(eq(decisionLog.id, id))
 }
