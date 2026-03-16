@@ -9,6 +9,24 @@ import { useState } from 'react'
 const TOOL_CHANGELOG = [
   {
     date: '2026-03-16',
+    title: 'Voice — Consumer feedback portal',
+    description: 'New consumer-facing feedback form at /voice with multi-step intake, AI triage, and research opt-in. Internal inbox at /feedback with status management, AI analysis, and initiative linking.',
+    category: 'portal',
+  },
+  {
+    date: '2026-03-16',
+    title: 'Research participant tracking',
+    description: 'Users who opt in to research are tracked at /feedback/participants. Manual add, tagging, contact tracking, and participant management.',
+    category: 'portal',
+  },
+  {
+    date: '2026-03-16',
+    title: 'Voice nav badge',
+    description: 'Nav shows unreviewed feedback count as a red badge on the Voice link. Updates on every page load.',
+    category: 'core',
+  },
+  {
+    date: '2026-03-16',
     title: 'Key account edit flow',
     description: 'Key account strips on the board now have edit, delete, link, and unlink functionality. Changes reflect immediately without a page reload.',
     category: 'board',

@@ -141,3 +141,47 @@ export interface RequestComment {
   created_at: Date
   replies?: RequestComment[]
 }
+
+// ─── Voice / Feedback ───
+
+export type FeedbackStatus = 'new' | 'reviewing' | 'actioned' | 'archived' | 'merged'
+export type FeedbackCategory = 'bug' | 'feature' | 'experience' | 'pricing' | 'other'
+export type UserType = 'consumer' | 'restaurant_partner' | 'internal'
+export type OrderContext = 'dine_in' | 'takeaway' | 'voucher' | 'general'
+
+export interface FeedbackSubmission {
+  id: string
+  name: string
+  email: string
+  user_type: UserType
+  category: FeedbackCategory
+  title: string
+  body: string
+  restaurant_name: string | null
+  order_context: OrderContext | null
+  device: string | null
+  app_version: string | null
+  ai_triage: string | null
+  ai_triaged_at: Date | null
+  status: FeedbackStatus
+  internal_note: string
+  actioned_initiative_id: string | null
+  research_opt_in: boolean
+  created_at: Date
+  reviewed_at: Date | null
+  reviewed_by: string | null
+}
+
+export interface ResearchParticipant {
+  id: string
+  name: string
+  email: string
+  user_type: UserType
+  source: string
+  tags: string
+  notes: string
+  last_contacted_at: Date | null
+  contact_count: number
+  opted_in_at: Date
+  created_at: Date
+}

@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import Nav from './Nav'
 import Footer from './Footer'
 
-export default function LayoutShell({ children }: { children: React.ReactNode }) {
+export default function LayoutShell({ children, unreviewedCount }: { children: React.ReactNode; unreviewedCount?: number }) {
   const pathname = usePathname()
   const isPublic = pathname === '/public' || pathname === '/stakeholder'
 
@@ -14,7 +14,7 @@ export default function LayoutShell({ children }: { children: React.ReactNode })
 
   return (
     <>
-      <Nav />
+      <Nav unreviewedCount={unreviewedCount} />
       <div className="flex-1">{children}</div>
       <Footer />
     </>

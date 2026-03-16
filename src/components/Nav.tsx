@@ -8,9 +8,14 @@ const links = [
   { href: '/stats', label: 'Stats' },
   { href: '/how-it-works', label: 'How it works' },
   { href: '/requests', label: 'Feature requests' },
+  { href: '/feedback', label: 'Voice' },
 ]
 
-export default function Nav() {
+interface Props {
+  unreviewedCount?: number
+}
+
+export default function Nav({ unreviewedCount = 0 }: Props) {
   const pathname = usePathname()
 
   return (
@@ -51,6 +56,11 @@ export default function Nav() {
               }}
             >
               {link.label}
+              {link.href === '/feedback' && unreviewedCount > 0 && (
+                <span className="ml-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-red-500 text-white">
+                  {unreviewedCount}
+                </span>
+              )}
               {isActive && (
                 <span
                   className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full"

@@ -158,3 +158,40 @@ export const activityLog = pgTable('activity_log', {
   metadata: text('metadata').default('{}'),
   created_at: timestamp('created_at').defaultNow(),
 })
+
+export const feedbackSubmissions = pgTable('feedback_submissions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  user_type: text('user_type').notNull().default('consumer'),
+  category: text('category').notNull(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  restaurant_name: text('restaurant_name'),
+  order_context: text('order_context'),
+  device: text('device'),
+  app_version: text('app_version'),
+  ai_triage: text('ai_triage'),
+  ai_triaged_at: timestamp('ai_triaged_at'),
+  status: text('status').notNull().default('new'),
+  internal_note: text('internal_note').default(''),
+  actioned_initiative_id: uuid('actioned_initiative_id').references(() => initiatives.id),
+  research_opt_in: boolean('research_opt_in').notNull().default(false),
+  created_at: timestamp('created_at').defaultNow(),
+  reviewed_at: timestamp('reviewed_at'),
+  reviewed_by: text('reviewed_by'),
+})
+
+export const researchParticipants = pgTable('research_participants', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  email: text('email').notNull().unique(),
+  user_type: text('user_type').notNull().default('consumer'),
+  source: text('source').notNull().default('voice_form'),
+  tags: text('tags').default('[]'),
+  notes: text('notes').default(''),
+  last_contacted_at: timestamp('last_contacted_at'),
+  contact_count: integer('contact_count').default(0),
+  opted_in_at: timestamp('opted_in_at').defaultNow(),
+  created_at: timestamp('created_at').defaultNow(),
+})
