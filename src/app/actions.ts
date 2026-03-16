@@ -1,12 +1,12 @@
 'use server'
 
 import { db } from '@/db'
-import { initiatives, strategicLevels, featureRequests, votes, requestComments, activityLog, linearSyncLog, keyAccounts, keyAccountInitiatives, initiativeReactions } from '@/db/schema'
+import { initiatives, strategicLevels, featureRequests, votes, requestComments, activityLog, linearSyncLog, keyAccounts, keyAccountInitiatives, initiativeReactions, digestSubscribers } from '@/db/schema'
 import { eq, asc, desc, sql, isNull, ilike, or, inArray, and } from 'drizzle-orm'
 import { createHash } from 'crypto'
 import { headers } from 'next/headers'
 import { getFingerprint } from '@/lib/fingerprint'
-import type { Initiative, StrategicLevel, Column, FeatureRequest, RequestStatus, Criterion, Phase, RequestComment, LinearSyncLogEntry, KeyAccount, KeyAccountInitiative, ReactionCount } from '@/types'
+import type { Initiative, StrategicLevel, Column, FeatureRequest, RequestStatus, Criterion, Phase, RequestComment, LinearSyncLogEntry, KeyAccount, KeyAccountInitiative, ReactionCount, DigestSubscriber } from '@/types'
 
 // ─── Initiatives ───
 
@@ -1220,4 +1220,144 @@ export async function toggleReaction(initiativeId: string, emoji: string): Promi
   }
 
   return getReactionsForInitiative(initiativeId)
+}
+
+// ─── Digest Subscribers ───
+
+export async function subscribeToDigest(email: string, name?: string): Promise<{ success: boolean; alreadySubscribed: boolean }> {
+  const normalized = email.toLowerCase().trim()
+  const [existing] = await db
+    .select()
+    .from(digestSubscribers)
+    .where(eq(digestSubscribers.email, normalized))
+
+  if (existing) {
+    if (existing.is_active) {
+      return { success: true, alreadySubscribed: true }
+    }
+    // Reactivate
+    await db.update(digestSubscribers).set({ is_active: true, name: name ?? existing.name }).where(eq(digestSubscribers.id, existing.id))
+    return { success: true, alreadySubscribed: false }
+  }
+
+  await db.insert(digestSubscribers).values({ email: normalized, name: name ?? '' })
+  return { success: true, alreadySubscribed: false }
+}
+
+export async function unsubscribeFromDigest(email: string) {
+  const normalized = email.toLowerCase().trim()
+  await db.update(digestSubscribers).set({ is_active: false }).where(eq(digestSubscribers.email, normalized))
+}
+
+export async function getDigestSubscribers(): Promise<DigestSubscriber[]> {
+  const rows = await db
+    .select()
+    .from(digestSubscribers)
+    .where(eq(digestSubscribers.is_active, true))
+    .orderBy(asc(digestSubscribers.subscribed_at))
+
+  return rows.map((r) => ({
+    id: r.id,
+    email: r.email,
+    name: r.name ?? '',
+    is_active: r.is_active ?? true,
+    subscribed_at: r.subscribed_at ?? new Date(),
+  }))
+}
+
+export async function getAllDigestSubscribers(): Promise<DigestSubscriber[]> {
+  const rows = await db
+    .select()
+    .from(digestSubscribers)
+    .orderBy(asc(digestSubscribers.subscribed_at))
+
+  return rows.map((r) => ({
+    id: r.id,
+    email: r.email,
+    name: r.name ?? '',
+    is_active: r.is_active ?? true,
+    subscribed_at: r.subscribed_at ?? new Date(),
+  }))
+}
+
+export async function deleteDigestSubscriber(id: string) {
+  await db.delete(digestSubscribers).where(eq(digestSubscribers.id, id))
+}
+
+export async function toggleDigestSubscriber(id: string, isActive: boolean) {
+  await db.update(digestSubscribers).set({ is_active: isActive }).where(eq(digestSubscribers.id, id))
+}
+
+export async function getWeeklyDigestData() {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+
+  // Initiatives moved in last 7 days
+  const moveRows = await db
+    .select()
+    .from(activityLog)
+    .where(
+      and(
+        eq(activityLog.action, 'moved'),
+        eq(activityLog.entity_type, 'initiative'),
+        sql`${activityLog.created_at} > ${sevenDaysAgo}`
+      )
+    )
+    .orderBy(desc(activityLog.created_at))
+
+  // All current initiatives for counts
+  const allInitiatives = await db
+    .select({
+      id: initiatives.id,
+      title: initiatives.title,
+      column: initiatives.column,
+    })
+    .from(initiatives)
+
+  const columnCounts: Record<string, number> = { now: 0, next: 0, later: 0, parked: 0 }
+  for (const i of allInitiatives) {
+    if (columnCounts[i.column] !== undefined) columnCounts[i.column]++
+  }
+
+  // Build initiative title map
+  const titleMap = new Map(allInitiatives.map((i) => [i.id, i.title]))
+
+  // Parse moves
+  const moves = moveRows.map((r) => {
+    const meta = JSON.parse(r.metadata ?? '{}')
+    return {
+      title: titleMap.get(r.entity_id ?? '') ?? 'Unknown',
+      from: meta.from ?? '?',
+      to: meta.to ?? '?',
+    }
+  })
+
+  // New feature requests in last 7 days
+  const newRequests = await db
+    .select()
+    .from(featureRequests)
+    .where(sql`${featureRequests.created_at} > ${sevenDaysAgo}`)
+    .orderBy(desc(featureRequests.vote_count))
+
+  // Feature requests with status changes (from activity_log)
+  const statusChanges = await db
+    .select()
+    .from(activityLog)
+    .where(
+      and(
+        eq(activityLog.entity_type, 'feature_request'),
+        sql`${activityLog.created_at} > ${sevenDaysAgo}`
+      )
+    )
+
+  return {
+    moves,
+    columnCounts,
+    newRequestCount: newRequests.length,
+    topRequests: newRequests.slice(0, 3).map((r) => ({
+      title: r.title,
+      vote_count: r.vote_count ?? 0,
+      status: r.status ?? 'open',
+    })),
+    statusChangeCount: statusChanges.length,
+  }
 }

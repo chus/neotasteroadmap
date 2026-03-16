@@ -21,6 +21,7 @@ import SwimlaneView from './SwimlaneView'
 import ListView from './ListView'
 import StatsPanel from './StatsPanel'
 import Toast from './Toast'
+import DigestSubscribe from './DigestSubscribe'
 import {
   updateInitiativeColumn,
   updatePositions,
@@ -605,6 +606,8 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
           onClose={() => setAddingToColumn(null)}
         />
       )}
+
+      <DigestSubscribe />
 
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </div>

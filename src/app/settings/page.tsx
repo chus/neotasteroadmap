@@ -1,16 +1,18 @@
-import { getStrategicLevels, getInitiatives, getAllLinearSyncLogs, getKeyAccounts } from '../actions'
+import { getStrategicLevels, getInitiatives, getAllLinearSyncLogs, getKeyAccounts, getAllDigestSubscribers } from '../actions'
 import StrategicLevelsManager from '@/components/StrategicLevelsManager'
 import LinearSettings from '@/components/LinearSettings'
 import KeyAccountsManager from '@/components/KeyAccountsManager'
+import DigestManager from '@/components/DigestManager'
 
 export const dynamic = 'force-dynamic'
 
 export default async function SettingsPage() {
-  const [levels, initiatives, syncLogs, keyAccounts] = await Promise.all([
+  const [levels, initiatives, syncLogs, keyAccounts, digestSubscribers] = await Promise.all([
     getStrategicLevels(),
     getInitiatives(),
     getAllLinearSyncLogs(20, 0),
     getKeyAccounts(),
+    getAllDigestSubscribers(),
   ])
 
   // Count initiatives per level
@@ -38,6 +40,11 @@ export default async function SettingsPage() {
       <StrategicLevelsManager initialLevels={levels} levelCounts={levelCounts} />
 
       <KeyAccountsManager initialAccounts={keyAccounts} />
+
+      <DigestManager
+        initialSubscribers={digestSubscribers}
+        cronSecret={process.env.DIGEST_CRON_SECRET ?? ''}
+      />
     </main>
   )
 }

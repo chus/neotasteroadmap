@@ -113,6 +113,14 @@ export const initiativeReactions = pgTable('initiative_reactions', {
   unique('ir_initiative_emoji_fingerprint').on(table.initiative_id, table.emoji, table.reactor_fingerprint),
 ])
 
+export const digestSubscribers = pgTable('digest_subscribers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  email: text('email').notNull().unique(),
+  name: text('name').default(''),
+  is_active: boolean('is_active').default(true),
+  subscribed_at: timestamp('subscribed_at').defaultNow(),
+})
+
 export const activityLog = pgTable('activity_log', {
   id: uuid('id').defaultRandom().primaryKey(),
   action: text('action').notNull(),

@@ -63,6 +63,14 @@ export interface ReactionCount {
   reacted: boolean
 }
 
+export interface DigestSubscriber {
+  id: string
+  email: string
+  name: string
+  is_active: boolean
+  subscribed_at: Date
+}
+
 export interface LinearSyncLogEntry {
   id: string
   initiative_id: string
