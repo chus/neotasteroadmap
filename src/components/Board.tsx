@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -67,6 +67,14 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
 
   // Release modal state
   const [pendingRelease, setPendingRelease] = useState<{ initiativeId: string; previousColumn: Column } | null>(null)
+
+  // Parked criterion toast (auto-dismiss after 8s)
+  const [parkedCriterionToast, setParkedCriterionToast] = useState<{ initiativeId: string; title: string; column: Column } | null>(null)
+  useEffect(() => {
+    if (!parkedCriterionToast) return
+    const timer = setTimeout(() => setParkedCriterionToast(null), 8000)
+    return () => clearTimeout(timer)
+  }, [parkedCriterionToast])
 
   // Modal state
   const [addingToColumn, setAddingToColumn] = useState<Column | null>(null)
@@ -194,6 +202,19 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
           .map((i) => (i.id === active.id ? { ...i, column: overCol } : i))
           .filter((i) => i.column === overCol)
         await updateInitiativeColumn(active.id as string, overCol, targetItems.length - 1)
+
+        // Auto-set criterion to parked when dragging into parked column
+        if (overCol === 'parked' && activeItem.criterion !== 'parked') {
+          await updateInitiative(active.id as string, { criterion: 'parked' })
+          setItems((prev) =>
+            prev.map((i) => i.id === active.id ? { ...i, criterion: 'parked' as Criterion } : i)
+          )
+        }
+
+        // Show toast when dragging out of parked with parked criterion
+        if (previousColumn === 'parked' && overCol !== 'parked' && activeItem.criterion === 'parked') {
+          setParkedCriterionToast({ initiativeId: active.id as string, title: activeItem.title, column: overCol })
+        }
       }
       const currentItems = items
         .filter((i) => i.column === overCol || i.id === active.id)
@@ -683,6 +704,36 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
       )}
 
       <DigestSubscribe />
+
+      {/* Parked criterion toast */}
+      {parkedCriterionToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+          <div className="flex items-center gap-3 text-[13px] px-4 py-2.5 rounded-lg text-white shadow-lg" style={{ backgroundColor: '#0D2818' }}>
+            <span>
+              &ldquo;{parkedCriterionToast.title}&rdquo; moved to {COLUMNS.find((c) => c.id === parkedCriterionToast.column)?.label}. Criterion is still &lsquo;Parked&rsquo; — update it?
+            </span>
+            <button
+              onClick={() => {
+                const init = items.find((i) => i.id === parkedCriterionToast.initiativeId)
+                if (init) {
+                  setSelectedInitiative(init)
+                  // Will open in read mode; user can click Edit
+                }
+                setParkedCriterionToast(null)
+              }}
+              className="shrink-0 text-[12px] font-medium px-2.5 py-1 rounded bg-white/20 hover:bg-white/30"
+            >
+              Update criterion
+            </button>
+            <button
+              onClick={() => setParkedCriterionToast(null)}
+              className="shrink-0 text-[12px] text-white/60 hover:text-white/80"
+            >
+              Keep as is
+            </button>
+          </div>
+        </div>
+      )}
 
       {toast && <Toast message={toast} onDismiss={() => setToast(null)} />}
     </div>

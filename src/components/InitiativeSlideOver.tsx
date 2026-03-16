@@ -643,6 +643,15 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
     if (!form.title.trim()) return
     setSaving(true)
     setSaveError(null)
+
+    // Sync criterion ↔ column
+    let finalColumn = form.column as Column
+    if (form.criterion === 'parked' && form.column !== 'parked') {
+      finalColumn = 'parked'
+    } else if (form.criterion !== 'parked' && form.column === 'parked') {
+      finalColumn = 'later'
+    }
+
     try {
       await onSave({
         title: form.title,
@@ -654,7 +663,7 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
         effort: form.effort || null,
         target_month: form.target_month || null,
         is_public: form.is_public,
-        column: form.column as Column,
+        column: finalColumn,
         ...(initiative.is_parent ? { phase: form.phase || null } : {}),
         confidence_problem: form.confidence_problem,
         confidence_solution: form.confidence_solution,
@@ -784,13 +793,37 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                   </div>
                   <div>
                     <label className="text-[10px] text-neutral-400">Column</label>
-                    <select className={selectClass} value={form.column} onChange={(e) => setForm({ ...form, column: e.target.value })}>
+                    <select
+                      className={selectClass}
+                      value={form.column}
+                      onChange={(e) => setForm({ ...form, column: e.target.value })}
+                      disabled={form.criterion === 'parked'}
+                      style={{ opacity: form.criterion === 'parked' ? 0.5 : 1 }}
+                    >
                       {COLUMNS.map((c) => <option key={c.id} value={c.id}>{c.label} ({c.sublabel})</option>)}
                     </select>
+                    {form.criterion === 'parked' && (
+                      <p className="text-[10px] text-neutral-400 mt-1">Column set automatically when criterion is Parked</p>
+                    )}
                   </div>
                   <div>
                     <label className="text-[10px] text-neutral-400">Primary criterion</label>
-                    <select className={selectClass} value={form.criterion} onChange={(e) => setForm({ ...form, criterion: e.target.value as Criterion })}>
+                    <select
+                      className={selectClass}
+                      value={form.criterion}
+                      onChange={(e) => {
+                        const value = e.target.value as Criterion
+                        setForm((s) => ({
+                          ...s,
+                          criterion: value,
+                          column: value === 'parked'
+                            ? 'parked'
+                            : s.column === 'parked'
+                              ? 'later'
+                              : s.column,
+                        }))
+                      }}
+                    >
                       {(Object.entries(CRITERION_CONFIG) as [Criterion, { label: string }][]).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                     </select>
                   </div>
