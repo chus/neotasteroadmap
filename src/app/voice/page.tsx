@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import VoiceForm from '@/components/voice/VoiceForm'
 
 export const dynamic = 'force-dynamic'
@@ -30,6 +31,9 @@ export default function VoicePage() {
           <p className="text-[11px] text-neutral-400">
             Your feedback is reviewed by the NeoTaste product team. We read everything.
           </p>
+          <Link href="/docs" className="text-[11px] text-neutral-400 hover:text-neutral-600 transition-colors">
+            Internal documentation &rarr;
+          </Link>
         </div>
       </div>
     </main>
