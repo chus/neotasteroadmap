@@ -1556,6 +1556,69 @@ export async function applyTriageSuggestions(requestId: string) {
 
 // ─── Released ───
 
+export async function linkExistingToLinear(
+  initiativeId: string,
+  linearProjectId: string,
+  pullState: boolean,
+  pushData: boolean
+): Promise<{ success: boolean; error?: string }> {
+  const { isLinearConfigured, getLinearProject, LINEAR_STATE_TO_COLUMN } = await import('@/lib/linear')
+
+  if (!isLinearConfigured()) {
+    return { success: false, error: 'Linear not configured' }
+  }
+
+  try {
+    const linearProject = await getLinearProject(linearProjectId)
+
+    const [current] = await db.select().from(initiatives).where(eq(initiatives.id, initiativeId))
+    if (!current) return { success: false, error: 'Initiative not found' }
+
+    // Store linear fields
+    await db.update(initiatives).set({
+      linear_project_id: linearProjectId,
+      linear_url: linearProject.url,
+      linear_state: linearProject.state,
+      linear_synced_at: new Date(),
+      linear_sync_enabled: true,
+    }).where(eq(initiatives.id, initiativeId))
+
+    // Pull state if requested
+    if (pullState) {
+      const newColumn = LINEAR_STATE_TO_COLUMN[linearProject.state]
+      if (newColumn && newColumn !== current.column) {
+        await db.update(initiatives).set({ column: newColumn }).where(eq(initiatives.id, initiativeId))
+        await db.insert(activityLog).values({
+          action: 'moved',
+          entity_type: 'initiative',
+          entity_id: initiativeId,
+          metadata: JSON.stringify({ note: 'synced from Linear', from: current.column, to: newColumn }),
+        })
+      }
+    }
+
+    // Push data if requested
+    if (pushData) {
+      await pushToLinear(initiativeId)
+    }
+
+    // Log link event
+    await db.insert(linearSyncLog).values({
+      initiative_id: initiativeId,
+      initiative_title: current.title,
+      direction: 'pull',
+      status: 'success',
+      linear_project_id: linearProjectId,
+      changes: JSON.stringify({ action: 'linked', linear_state: linearProject.state }),
+    })
+
+    return { success: true }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    return { success: false, error: message }
+  }
+}
+
 export async function releaseInitiative(id: string, releaseNote: string) {
   await db.update(initiatives).set({
     column: 'released',

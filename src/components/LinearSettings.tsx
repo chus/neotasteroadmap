@@ -197,8 +197,12 @@ export default function LinearSettings({ isConfigured, initiatives, strategicLev
       {showImportModal && (
         <LinearImportModal
           strategicLevels={strategicLevels}
+          initiatives={initiatives}
           onImported={(init) => {
             onInitiativeImported?.(init)
+            setShowImportModal(false)
+          }}
+          onLinked={() => {
             setShowImportModal(false)
           }}
           onClose={() => setShowImportModal(false)}

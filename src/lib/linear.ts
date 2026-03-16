@@ -84,9 +84,9 @@ export async function getLinearTeam(): Promise<{ id: string; name: string; key: 
     }
   }`)
 
-  const team = data.teams.nodes.find((t) => t.name === teamName)
+  const team = data.teams.nodes.find((t) => t.name === teamName) ?? data.teams.nodes[0]
   if (!team) {
-    throw new LinearAPIError(`Team "${teamName}" not found in Linear workspace`, 404)
+    throw new LinearAPIError(`No teams found in Linear workspace`, 404)
   }
 
   cachedTeam = team
