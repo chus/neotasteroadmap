@@ -230,36 +230,51 @@ export default function LinearImportModal({ strategicLevels, initiatives, onImpo
                   {projects.length === 0 ? 'No projects found. Check your Linear API key and team configuration.' : 'No matching projects.'}
                 </div>
               ) : (
-                filteredProjects.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => setSelectedProjectId(p.id === selectedProjectId ? null : p.id)}
-                    className={`w-full text-left px-3 py-2.5 border-b border-neutral-100 last:border-0 hover:bg-neutral-50 transition-colors ${
-                      selectedProjectId === p.id ? 'bg-[#5E6AD2]/5' : ''
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[13px] font-medium text-neutral-800 truncate">{p.name}</span>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span
-                          className="text-[9px] font-medium px-1.5 py-0.5 rounded-full"
-                          style={{
-                            backgroundColor: (STATE_COLORS[p.state] ?? '#999') + '20',
-                            color: STATE_COLORS[p.state] ?? '#999',
-                          }}
-                        >
-                          {p.state}
-                        </span>
-                        {p.targetDate && (
-                          <span className="text-[10px] text-neutral-400">{p.targetDate}</span>
-                        )}
+                filteredProjects.map((p) => {
+                  const bestMatch = initiatives.reduce<{ title: string; score: number } | null>((best, init) => {
+                    const score = similarity(p.name, init.title)
+                    if (score > (best?.score ?? 0.4)) return { title: init.title, score }
+                    return best
+                  }, null)
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => setSelectedProjectId(p.id === selectedProjectId ? null : p.id)}
+                      className={`w-full text-left px-3 py-2.5 border-b border-neutral-100 last:border-0 hover:bg-neutral-50 transition-colors ${
+                        selectedProjectId === p.id ? 'bg-[#5E6AD2]/5' : ''
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[13px] font-medium text-neutral-800 truncate">{p.name}</span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          {bestMatch && (
+                            <span className="text-[8px] font-medium px-1.5 py-0.5 rounded bg-amber-100 text-amber-700" title={`Similar to: ${bestMatch.title}`}>
+                              Possible duplicate
+                            </span>
+                          )}
+                          <span
+                            className="text-[9px] font-medium px-1.5 py-0.5 rounded-full"
+                            style={{
+                              backgroundColor: (STATE_COLORS[p.state] ?? '#999') + '20',
+                              color: STATE_COLORS[p.state] ?? '#999',
+                            }}
+                          >
+                            {p.state}
+                          </span>
+                          {p.targetDate && (
+                            <span className="text-[10px] text-neutral-400">{p.targetDate}</span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    {p.description && (
-                      <p className="text-[11px] text-neutral-400 mt-0.5 truncate">{p.description}</p>
-                    )}
-                  </button>
-                ))
+                      {bestMatch && (
+                        <p className="text-[10px] text-amber-600 mt-0.5">Similar to: {bestMatch.title}</p>
+                      )}
+                      {!bestMatch && p.description && (
+                        <p className="text-[11px] text-neutral-400 mt-0.5 truncate">{p.description}</p>
+                      )}
+                    </button>
+                  )
+                })
               )}
             </div>
 

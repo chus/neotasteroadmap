@@ -522,53 +522,44 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
           >
-            <div className="grid grid-cols-3 gap-4">
-              {activeColumns.map((col) => (
+            <div className="flex gap-4">
+              <div className="flex-1 grid grid-cols-3 gap-4">
+                {activeColumns.map((col) => (
+                  <BoardColumn
+                    key={col.id}
+                    columnId={col.id}
+                    label={col.label}
+                    sublabel={col.sublabel}
+                    initiatives={getColumnItems(col.id)}
+                    activeFilterLevelId={activeFilterLevelId}
+                    searchQuery={searchQuery}
+                    isOver={overId === col.id}
+                    onEdit={handleEditFromMenu}
+                    onDelete={handleDeleteFromCard}
+                    onAddClick={setAddingToColumn}
+                    onCardClick={handleCardClick}
+                    reactionMap={reactionMap}
+                  />
+                ))}
+              </div>
+
+              {/* Released column — far right sidebar */}
+              <div className="w-[220px] shrink-0 border-l border-green-200 pl-4">
                 <BoardColumn
-                  key={col.id}
-                  columnId={col.id}
-                  label={col.label}
-                  sublabel={col.sublabel}
-                  initiatives={getColumnItems(col.id)}
+                  columnId={releasedColumn.id}
+                  label={releasedColumn.label}
+                  sublabel={releasedColumn.sublabel}
+                  initiatives={getColumnItems(releasedColumn.id)}
                   activeFilterLevelId={activeFilterLevelId}
                   searchQuery={searchQuery}
-                  isOver={overId === col.id}
+                  isOver={overId === 'released'}
                   onEdit={handleEditFromMenu}
                   onDelete={handleDeleteFromCard}
                   onAddClick={setAddingToColumn}
                   onCardClick={handleCardClick}
                   reactionMap={reactionMap}
                 />
-              ))}
-            </div>
-
-            {/* Released column */}
-            <div className="relative my-8">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-green-200" />
               </div>
-              <div className="relative flex justify-center">
-                <span className="bg-white px-3 text-[10px] uppercase tracking-widest text-green-500">
-                  Released
-                </span>
-              </div>
-            </div>
-
-            <div className="max-w-sm">
-              <BoardColumn
-                columnId={releasedColumn.id}
-                label={releasedColumn.label}
-                sublabel={releasedColumn.sublabel}
-                initiatives={getColumnItems(releasedColumn.id)}
-                activeFilterLevelId={activeFilterLevelId}
-                searchQuery={searchQuery}
-                isOver={overId === 'released'}
-                onEdit={handleEditFromMenu}
-                onDelete={handleDeleteFromCard}
-                onAddClick={setAddingToColumn}
-                onCardClick={handleCardClick}
-                reactionMap={reactionMap}
-              />
             </div>
 
             {/* Parked divider */}
