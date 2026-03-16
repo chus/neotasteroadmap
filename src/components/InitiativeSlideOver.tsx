@@ -185,16 +185,16 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
   return (
     <div
       ref={backdropRef}
-      className="fixed inset-0 z-40 bg-black/30"
+      className="fixed inset-0 top-[52px] z-40 bg-black/25"
       onClick={handleBackdropClick}
     >
-      <div className="absolute right-0 top-0 bottom-0 w-full max-w-[480px] bg-white shadow-xl overflow-y-auto animate-slide-in">
-        {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-neutral-100 px-6 py-4 flex items-center justify-between z-10">
-          <h2 className="text-[14px] font-semibold text-neutral-800">
-            {editing ? 'Edit initiative' : 'Initiative detail'}
+      <div className="fixed top-[52px] right-0 bottom-0 w-full max-w-[480px] bg-white shadow-xl flex flex-col overflow-hidden animate-slide-in sm:max-w-[480px] max-sm:max-w-full">
+        {/* Header — never scrolls */}
+        <div className="shrink-0 bg-white border-b border-neutral-100 px-5 py-4 flex items-start justify-between gap-3">
+          <h2 className="text-[14px] font-semibold text-neutral-800 flex-1 break-words">
+            {editing ? 'Edit initiative' : initiative.title}
           </h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             {editing ? (
               <>
                 <button
@@ -221,13 +221,18 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                 Edit
               </button>
             )}
-            <button onClick={handleClose} className="text-neutral-400 hover:text-neutral-600 text-[18px] leading-none ml-1">
+            <button
+              onClick={handleClose}
+              className="w-7 h-7 flex items-center justify-center rounded-md border border-neutral-200 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50 text-[16px] shrink-0"
+              title="Close"
+            >
               &times;
             </button>
           </div>
         </div>
 
-        <div className="px-6 py-5">
+        {/* Body — scrollable */}
+        <div className="flex-1 overflow-y-auto px-5 py-5" style={{ WebkitOverflowScrolling: 'touch' }}>
           {editing ? (
             /* ─── Edit mode ─── */
             <div className="space-y-5">
@@ -760,3 +765,7 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
     </div>
   )
 }
+
+// Note: The panel uses fixed positioning starting at top-[52px] to sit below
+// the sticky nav bar (h-[52px] z-50). The header is shrink-0 so it never
+// scrolls, and the body is flex-1 overflow-y-auto for scrollable content.
