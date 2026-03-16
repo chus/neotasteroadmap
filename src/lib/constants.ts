@@ -53,6 +53,82 @@ export const PHASE_CONFIG: Record<Phase, { label: string; color: string }> = {
   done:       { label: 'Done',       color: '#6B7280' },
 }
 
+export interface InitiativeTemplate {
+  id: string
+  label: string
+  description: string
+  defaults: {
+    criterion: Criterion
+    criterion_secondary: Criterion | null
+    effort: string
+    dep_note: string
+    subtitle: string
+  }
+}
+
+export const INITIATIVE_TEMPLATES: InitiativeTemplate[] = [
+  {
+    id: 'new_feature',
+    label: 'New feature',
+    description: 'A user-facing capability that is scoped and ready to build.',
+    defaults: {
+      criterion: 'execution_ready',
+      criterion_secondary: null,
+      effort: 'm',
+      dep_note: '',
+      subtitle: '',
+    },
+  },
+  {
+    id: 'tech_foundation',
+    label: 'Tech foundation',
+    description: 'Infrastructure, tooling, or data work that enables future product decisions.',
+    defaults: {
+      criterion: 'foundation',
+      criterion_secondary: null,
+      effort: 'm',
+      dep_note: '',
+      subtitle: 'Enables future experiments and product decisions.',
+    },
+  },
+  {
+    id: 'partner_dependency',
+    label: 'Partner / team dependency',
+    description: 'Work triggered by an external partner or another internal team.',
+    defaults: {
+      criterion: 'dependency',
+      criterion_secondary: 'execution_ready',
+      effort: 's',
+      dep_note: 'Triggered by: ',
+      subtitle: '',
+    },
+  },
+  {
+    id: 'research_spike',
+    label: 'Research spike',
+    description: 'An investigation or prototype needed before committing to a full build.',
+    defaults: {
+      criterion: 'research',
+      criterion_secondary: null,
+      effort: 's',
+      dep_note: 'Output: decision on whether to proceed and recommended approach.',
+      subtitle: 'Time-boxed investigation to validate approach before committing.',
+    },
+  },
+  {
+    id: 'strategic_bet',
+    label: 'Strategic bet',
+    description: 'A large, multi-quarter initiative with high uncertainty.',
+    defaults: {
+      criterion: 'research',
+      criterion_secondary: null,
+      effort: 'xl',
+      dep_note: 'Requires partner evaluation and technical spikes before commitment.',
+      subtitle: '',
+    },
+  },
+]
+
 export const PARENT_COLORS = [
   '#5E6AD2', '#E5484D', '#F76B15', '#12A594', '#E93D82',
   '#0091FF', '#7C66DC', '#CD5EB0', '#30A46C', '#FFC53D',
