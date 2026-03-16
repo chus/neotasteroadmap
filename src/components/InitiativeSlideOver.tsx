@@ -79,10 +79,19 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
   const initialForm = useMemo(() => makeForm(initiative), [initiative])
   const [form, setForm] = useState(initialForm)
 
-  // Reset form when initiative prop changes (e.g. after save updates the parent)
+  // Reset form when a different initiative is opened, or after save updates the data
   useEffect(() => {
     setForm(makeForm(initiative))
-  }, [initiative])
+    setEditing(false)
+    setSaveError(null)
+  }, [initiative.id])
+
+  // Also sync form when initiative data changes (e.g. after save)
+  useEffect(() => {
+    if (!editing) {
+      setForm(makeForm(initiative))
+    }
+  }, [initiative, editing])
 
   // Check if form has unsaved changes
   const isDirty = useMemo(() => {
@@ -179,7 +188,7 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
   }
 
   const inputClass = 'mt-1 w-full text-[13px] border border-neutral-200 rounded-md px-2.5 py-2 outline-none focus:border-[#50E88A] bg-white'
-  const selectClass = 'mt-1 w-full text-[13px] border border-neutral-200 rounded-md px-2.5 py-2 outline-none focus:border-[#50E88A] bg-white appearance-none'
+  const selectClass = 'mt-1 w-full text-[13px] border border-neutral-200 rounded-md px-2.5 py-2 outline-none focus:border-[#50E88A] bg-white'
   const labelClass = 'text-[10px] font-medium text-neutral-400 uppercase tracking-wide'
 
   return (
@@ -264,7 +273,13 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                 <div className={`${labelClass} mb-2`}>Sequencing</div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] text-neutral-400">Strategic level</label>
+                    <label className="text-[10px] text-neutral-400 flex items-center gap-1.5">
+                      Strategic level
+                      {(() => {
+                        const sel = strategicLevels.find((l) => l.id === form.strategic_level_id)
+                        return sel ? <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: sel.color }} /> : null
+                      })()}
+                    </label>
                     <select className={selectClass} value={form.strategic_level_id} onChange={(e) => setForm({ ...form, strategic_level_id: e.target.value })}>
                       <option value="">None</option>
                       {strategicLevels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -381,10 +396,9 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
           ) : (
             /* ─── Read mode ─── */
             <div>
-              {/* Overview */}
+              {/* Badges */}
               <section>
-                <h1 className="text-[20px] font-semibold text-neutral-800 leading-tight">{initiative.title}</h1>
-                <div className="flex items-center gap-2 flex-wrap mt-3">
+                <div className="flex items-center gap-2 flex-wrap">
                   {initiative.strategic_level_name && (
                     <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-neutral-600">
                       <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: initiative.strategic_level_color }} />
