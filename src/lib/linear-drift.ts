@@ -9,22 +9,33 @@ export interface DriftField {
 }
 
 export interface DriftResult {
+  // True only when high-severity drift exists (shows amber badge)
   hasDrift: boolean
+  // All detected differences (including low-severity informational ones)
   fields: DriftField[]
 }
+
+// Drift is only detected for fields where the roadmap is the source of truth
+// and Linear divergence represents a real sequencing decision that needs resolution.
+//
+// High severity (triggers amber badge + drift panel):
+// - column: Linear state moved but roadmap column didn't follow
+//
+// Low severity (informational only, shown muted in slide-over):
+// - title: Linear and roadmap titles often diverge intentionally
+//
+// Excluded from drift entirely:
+// - target_month: roadmap-owned, Linear rarely has dates set (false positives)
+// - progress / lead / members: Linear-owned enrichment, not roadmap fields
 
 export function detectDrift(
   initiative: {
     column: string
-    target_month: string | null
     title: string
-    linear_progress: number | null
   },
   linearProject: {
     state: string
-    targetDate: string | null
     name: string
-    progress: number
   }
 ): DriftResult {
   const fields: DriftField[] = []
@@ -41,19 +52,7 @@ export function detectDrift(
     })
   }
 
-  // Target date (medium severity)
-  const linearMonth = linearProject.targetDate ? linearProject.targetDate.substring(0, 7) : null
-  if (linearMonth !== initiative.target_month) {
-    fields.push({
-      field: 'target_month',
-      label: 'Target month',
-      roadmapValue: initiative.target_month ?? 'none',
-      linearValue: linearMonth ?? 'none',
-      severity: 'medium',
-    })
-  }
-
-  // Title (low severity)
+  // Title (low severity — informational only, does NOT trigger drift badge)
   if (linearProject.name !== initiative.title) {
     fields.push({
       field: 'title',
@@ -64,19 +63,10 @@ export function detectDrift(
     })
   }
 
-  // Progress newly available (low severity)
-  if (initiative.linear_progress === null && linearProject.progress > 0) {
-    fields.push({
-      field: 'progress',
-      label: 'Progress',
-      roadmapValue: 'not tracked',
-      linearValue: `${Math.round(linearProject.progress * 100)}%`,
-      severity: 'low',
-    })
-  }
+  const highSeverityFields = fields.filter((f) => f.severity === 'high')
 
   return {
-    hasDrift: fields.length > 0,
+    hasDrift: highSeverityFields.length > 0,
     fields,
   }
 }

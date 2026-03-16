@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { CRITERION_CONFIG, COLUMNS, EFFORT_CONFIG, MONTHS_2026, MONTH_SHORT, PHASE_CONFIG } from '@/lib/constants'
-import { getLinkedRequest, pushToLinear, pullFromLinear, unlinkFromLinear, getLinearSyncLog, getChildInitiatives, getReactionsForInitiative, runDriftDetection, applyLinearDrift, dismissDrift, pushAndResolveDrift } from '@/app/actions'
+import { getLinkedRequest, pushToLinear, pullFromLinear, unlinkFromLinear, getLinearSyncLog, getChildInitiatives, getReactionsForInitiative, runDriftDetection, applyLinearDrift, dismissDrift, pushAndResolveDrift, getInitiativeById } from '@/app/actions'
 import ReactionBar from './ReactionBar'
 import DecisionLog from './DecisionLog'
 import type { Initiative, StrategicLevel, FeatureRequest, Criterion, Column, Phase, LinearSyncLogEntry, ReactionCount } from '@/types'
@@ -39,6 +39,7 @@ interface Props {
   }) => Promise<void>
   onDelete: () => void
   onClose: () => void
+  onUpdate?: (updated: Initiative) => void
 }
 
 function makeForm(initiative: Initiative) {
@@ -73,6 +74,7 @@ function LinearSection({
   linearPullChanges, setLinearPullChanges,
   syncLog, setSyncLog,
   syncLogExpanded, setSyncLogExpanded,
+  onUpdate,
 }: {
   initiative: Initiative
   linearLinked: boolean; setLinearLinked: (v: boolean) => void
@@ -85,14 +87,30 @@ function LinearSection({
   linearPullChanges: string | null; setLinearPullChanges: (v: string | null) => void
   syncLog: LinearSyncLogEntry[]; setSyncLog: (v: LinearSyncLogEntry[]) => void
   syncLogExpanded: boolean; setSyncLogExpanded: (v: boolean) => void
+  onUpdate?: (updated: Initiative) => void
 }) {
   const [driftChecking, setDriftChecking] = useState(false)
   const [driftCheckResult, setDriftCheckResult] = useState<string | null>(null)
   const [selectedDriftFields, setSelectedDriftFields] = useState<Set<string>>(new Set())
   const [driftApplying, setDriftApplying] = useState(false)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
+
+  const isLoading = driftApplying
 
   const hasDrift = initiative.sync_status === 'drift'
   const driftFields = hasDrift && initiative.sync_drift ? JSON.parse(initiative.sync_drift) as { field: string; label: string; roadmapValue: string; linearValue: string; severity: string }[] : []
+
+  // Informational-only diffs (low severity, shown when not in full drift mode)
+  const infoFields = !hasDrift && initiative.sync_drift ? JSON.parse(initiative.sync_drift) as { field: string; label: string; roadmapValue: string; linearValue: string; severity: string }[] : []
+
+  async function refreshInitiative() {
+    const updated = await getInitiativeById(initiative.id)
+    if (updated) {
+      onUpdate?.(updated)
+    }
+    getLinearSyncLog(initiative.id).then(setSyncLog)
+    return updated
+  }
 
   // Parse enriched data
   const members: string[] = initiative.linear_members ? JSON.parse(initiative.linear_members) : []
@@ -181,7 +199,7 @@ function LinearSection({
                 if (result.success) {
                   setLinearSyncedAt(new Date())
                   setLinearPullChanges(result.changes ?? null)
-                  getLinearSyncLog(initiative.id).then(setSyncLog)
+                  await refreshInitiative()
                 } else {
                   setLinearError(result.error ?? 'Pull failed')
                 }
@@ -199,7 +217,7 @@ function LinearSection({
                 setLinearPushing(false)
                 if (result.success) {
                   setLinearSyncedAt(new Date())
-                  getLinearSyncLog(initiative.id).then(setSyncLog)
+                  await refreshInitiative()
                 } else {
                   setLinearError(result.error ?? 'Push failed')
                 }
@@ -218,6 +236,7 @@ function LinearSection({
                 setLinearState(null)
                 setLinearSyncedAt(null)
                 setSyncLog([])
+                await refreshInitiative()
               }}
               className="text-[11px] text-red-500 hover:text-red-700 ml-auto"
             >
@@ -274,35 +293,64 @@ function LinearSection({
                   onClick={async () => {
                     if (selectedDriftFields.size === 0) return
                     setDriftApplying(true)
-                    await applyLinearDrift(initiative.id, [...selectedDriftFields])
-                    setDriftApplying(false)
-                    setSelectedDriftFields(new Set())
-                    getLinearSyncLog(initiative.id).then(setSyncLog)
+                    setLinearError(null)
+                    try {
+                      await applyLinearDrift(initiative.id, [...selectedDriftFields])
+                      setSelectedDriftFields(new Set())
+                      setToastMessage('Sync resolved — in sync with Linear.')
+                      setTimeout(() => setToastMessage(null), 3000)
+                      await refreshInitiative()
+                    } catch {
+                      setLinearError('Failed to apply changes — please try again')
+                    } finally {
+                      setDriftApplying(false)
+                    }
                   }}
-                  disabled={selectedDriftFields.size === 0 || driftApplying}
+                  disabled={selectedDriftFields.size === 0 || isLoading}
                   className="text-[10px] font-medium px-2 py-1 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-40"
                 >
                   {driftApplying ? 'Applying...' : `Apply selected (${selectedDriftFields.size})`}
                 </button>
                 <button
                   onClick={async () => {
+                    if (!confirm('This will overwrite Linear with your roadmap values. Are you sure?')) return
                     setDriftApplying(true)
-                    await pushAndResolveDrift(initiative.id)
-                    setDriftApplying(false)
-                    getLinearSyncLog(initiative.id).then(setSyncLog)
+                    setLinearError(null)
+                    try {
+                      await pushAndResolveDrift(initiative.id)
+                      setToastMessage('Sync resolved — in sync with Linear.')
+                      setTimeout(() => setToastMessage(null), 3000)
+                      await refreshInitiative()
+                    } catch {
+                      setLinearError('Failed to push — please try again')
+                    } finally {
+                      setDriftApplying(false)
+                    }
                   }}
-                  disabled={driftApplying}
+                  disabled={isLoading}
                   className="text-[10px] font-medium px-2 py-1 rounded-lg border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
                 >
-                  Push roadmap → Linear
+                  {driftApplying ? 'Pushing...' : 'Push roadmap → Linear'}
                 </button>
                 <button
                   onClick={async () => {
-                    await dismissDrift(initiative.id)
+                    setDriftApplying(true)
+                    setLinearError(null)
+                    try {
+                      await dismissDrift(initiative.id)
+                      setToastMessage('Sync resolved — in sync with Linear.')
+                      setTimeout(() => setToastMessage(null), 3000)
+                      await refreshInitiative()
+                    } catch {
+                      setLinearError('Failed to dismiss — please try again')
+                    } finally {
+                      setDriftApplying(false)
+                    }
                   }}
-                  className="text-[10px] text-neutral-400 hover:text-neutral-600 ml-auto"
+                  disabled={isLoading}
+                  className="text-[10px] text-neutral-400 hover:text-neutral-600 ml-auto disabled:opacity-40"
                 >
-                  Dismiss
+                  {isLoading ? 'Dismissing...' : 'Dismiss'}
                 </button>
               </div>
             </div>
@@ -409,23 +457,56 @@ function LinearSection({
             </div>
           )}
 
+          {/* Informational diffs (low severity, title-only) */}
+          {!hasDrift && infoFields.length > 0 && (
+            <div className="text-[11px] text-neutral-400 space-y-1">
+              {infoFields.map((df) => (
+                <div key={df.field} className="flex items-center gap-1.5">
+                  <span className="w-1 h-1 rounded-full bg-neutral-300" />
+                  <span>{df.label}: <span className="text-neutral-500">{df.linearValue}</span></span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Toast for resolved drift */}
+          {toastMessage && (
+            <div className="text-[11px] text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-1.5">
+              {toastMessage}
+            </div>
+          )}
+
           {/* Manual drift check */}
           <div className="pt-2">
             <button
               onClick={async () => {
                 setDriftChecking(true)
                 setDriftCheckResult(null)
-                const result = await runDriftDetection(initiative.id)
-                setDriftChecking(false)
-                setDriftCheckResult(result.drifted > 0 ? 'Drift detected — refresh to see details' : 'No drift found')
+                try {
+                  await runDriftDetection(initiative.id)
+                  const updated = await refreshInitiative()
+                  if (updated?.sync_status === 'drift') {
+                    setDriftCheckResult('drift')
+                  } else {
+                    setDriftCheckResult('in_sync')
+                    setTimeout(() => setDriftCheckResult(null), 3000)
+                  }
+                } catch {
+                  setDriftCheckResult('error')
+                } finally {
+                  setDriftChecking(false)
+                }
               }}
               disabled={driftChecking}
               className="text-[10px] text-neutral-400 hover:text-neutral-600 disabled:opacity-40"
             >
               {driftChecking ? 'Checking...' : 'Check for drift now'}
             </button>
-            {driftCheckResult && (
-              <span className="text-[10px] text-neutral-400 ml-2">{driftCheckResult}</span>
+            {driftCheckResult === 'in_sync' && (
+              <span className="text-[10px] text-green-600 ml-2">In sync ✓</span>
+            )}
+            {driftCheckResult === 'error' && (
+              <span className="text-[10px] text-red-500 ml-2">Check failed — try again</span>
             )}
           </div>
 
@@ -458,7 +539,7 @@ function LinearSection({
   )
 }
 
-export default function InitiativeSlideOver({ initiative, strategicLevels, onSave, onDelete, onClose }: Props) {
+export default function InitiativeSlideOver({ initiative, strategicLevels, onSave, onDelete, onClose, onUpdate }: Props) {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -1112,6 +1193,7 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                 setSyncLog={setSyncLog}
                 syncLogExpanded={syncLogExpanded}
                 setSyncLogExpanded={setSyncLogExpanded}
+                onUpdate={onUpdate}
               />
             </div>
           )}

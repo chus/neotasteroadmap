@@ -635,6 +635,10 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
           onSave={handleSlideOverSave}
           onDelete={handleSlideOverDelete}
           onClose={() => setSelectedInitiative(null)}
+          onUpdate={(updated) => {
+            setItems((prev) => prev.map((i) => i.id === updated.id ? updated : i))
+            setSelectedInitiative(updated)
+          }}
         />
       )}
 

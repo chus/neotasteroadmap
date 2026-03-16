@@ -254,6 +254,24 @@ export async function deleteInitiative(id: string) {
   await db.delete(initiatives).where(eq(initiatives.id, id))
 }
 
+export async function getInitiativeById(id: string): Promise<Initiative | null> {
+  const rows = await db
+    .select({
+      initiative: initiatives,
+      level_name: strategicLevels.name,
+      level_color: strategicLevels.color,
+    })
+    .from(initiatives)
+    .leftJoin(strategicLevels, eq(initiatives.strategic_level_id, strategicLevels.id))
+    .where(eq(initiatives.id, id))
+    .limit(1)
+
+  if (!rows.length) return null
+
+  const r = rows[0]
+  return mapInitiativeRow(r.initiative, r.level_name ?? '', r.level_color ?? '#999')
+}
+
 export async function getPublicInitiatives(): Promise<Initiative[]> {
   const rows = await db
     .select({
@@ -1733,7 +1751,7 @@ export async function runDriftDetection(initiativeId?: string): Promise<{ checke
     try {
       const project = await getLinearProject(row.linear_project_id)
       const result = detectDrift(
-        { column: row.column, target_month: row.target_month, title: row.title, linear_progress: row.linear_progress },
+        { column: row.column, title: row.title },
         project
       )
 
@@ -1752,11 +1770,18 @@ export async function runDriftDetection(initiativeId?: string): Promise<{ checke
       }
 
       if (result.hasDrift) {
+        // High-severity drift — shows amber badge on card
         enrichedFields.sync_status = 'drift'
         enrichedFields.sync_drift = JSON.stringify(result.fields)
         enrichedFields.sync_drift_detected_at = new Date()
         drifted++
+      } else if (result.fields.length > 0) {
+        // Low-severity differences only (e.g. title) — informational, no badge
+        enrichedFields.sync_status = 'in_sync'
+        enrichedFields.sync_drift = JSON.stringify(result.fields)
+        enrichedFields.sync_drift_detected_at = null
       } else {
+        // Fully in sync
         enrichedFields.sync_status = 'in_sync'
         enrichedFields.sync_drift = null
         enrichedFields.sync_drift_detected_at = null
@@ -1786,14 +1811,13 @@ export async function applyLinearDrift(initiativeId: string, fieldsToApply: stri
 
   for (const df of driftFields) {
     if (!fieldsToApply.includes(df.field)) continue
+    if (df.field === 'target_month') continue // no longer synced from Linear
 
     if (df.field === 'column') {
       // linearValue is like "started → now", extract the column
       const parts = df.linearValue.split(' → ')
       const col = parts[parts.length - 1]
       if (col) updates.column = col
-    } else if (df.field === 'target_month') {
-      updates.target_month = df.linearValue === 'none' ? null : df.linearValue
     } else if (df.field === 'title') {
       updates.title = df.linearValue
     }
