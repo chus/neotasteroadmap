@@ -12,6 +12,7 @@ const SECTIONS = [
   { id: 'success', label: 'Success metrics' },
   { id: 'where', label: 'Where to find things' },
   { id: 'principles', label: 'Principles' },
+  { id: 'changelog', label: 'Changelog' },
 ]
 
 export default function DocsSidebar({ children }: { children: React.ReactNode }) {

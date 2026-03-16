@@ -1,13 +1,14 @@
-import { getFeedbackSubmissions, getClusters } from '@/app/feedback-actions'
+import { getFeedbackSubmissions, getClusters, getBacklogCounts } from '@/app/feedback-actions'
 import FeedbackInboxWithTabs from '@/components/voice/FeedbackInboxWithTabs'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
 export default async function FeedbackPage() {
-  const [submissions, clusters] = await Promise.all([
+  const [submissions, clusters, backlogCounts] = await Promise.all([
     getFeedbackSubmissions(),
     getClusters(),
+    getBacklogCounts(),
   ])
 
   return (
@@ -43,7 +44,11 @@ export default async function FeedbackPage() {
         </div>
       </div>
 
-      <FeedbackInboxWithTabs initialSubmissions={submissions} initialClusters={clusters} />
+      <FeedbackInboxWithTabs
+        initialSubmissions={submissions}
+        initialClusters={clusters}
+        watchingDueCount={backlogCounts.watchingDueCount}
+      />
     </main>
   )
 }

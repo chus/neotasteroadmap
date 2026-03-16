@@ -8,6 +8,30 @@ import { useState } from 'react'
 // Categories: core | board | integration | analytics | portal | sharing
 const TOOL_CHANGELOG = [
   {
+    date: '2026-03-17',
+    title: 'Voice — Problem backlog',
+    description: 'Staging layer between Voice clusters and the roadmap at /feedback/backlog. Items move through Watching → Backlog → Promoted/Declined. Clusters graduate to the backlog instead of going directly to the roadmap.',
+    category: 'portal',
+  },
+  {
+    date: '2026-03-17',
+    title: 'Voice — Daily agent',
+    description: 'AI cron job (06:00 UTC) processes submissions, detects anomalies (spikes, initiative matches, reappearing declined clusters), checks overdue watching items, suggests cluster merges, and posts a Slack briefing.',
+    category: 'analytics',
+  },
+  {
+    date: '2026-03-17',
+    title: 'Voice — Trend stats',
+    description: 'Dedicated /feedback/trends page with CSS-based charts: submission volume by strategic area, cluster velocity, signal quality over time, and system health metrics including response rate and backlog flow.',
+    category: 'analytics',
+  },
+  {
+    date: '2026-03-17',
+    title: 'Voice docs update',
+    description: 'Updated /docs with problem backlog, daily agent, and trend stats sections. Added documentation changelog section.',
+    category: 'core',
+  },
+  {
     date: '2026-03-16',
     title: 'Voice — Slack weekly digest',
     description: 'Weekly Slack digest (Monday 8am UTC) summarizes new submissions, top clusters, sentiment breakdown, and unreviewed count. Requires SLACK_WEBHOOK_URL env variable.',

@@ -5,16 +5,17 @@ import {
   getClusters,
   getClusterSubmissions,
   updateCluster,
-  mergeClusters,
   runClustering,
-  searchInitiativesForAction,
+  graduateClusterToBacklog,
 } from '@/app/feedback-actions'
 import type { FeedbackCluster, FeedbackSubmission, ClusterStatus } from '@/types'
 
-const STATUS_CONFIG: Record<ClusterStatus, { label: string; color: string; bg: string }> = {
-  active:   { label: 'Active',   color: '#0C447C', bg: '#E6F1FB' },
-  resolved: { label: 'Resolved', color: '#085041', bg: '#E1F5EE' },
-  watching: { label: 'Watching', color: '#633806', bg: '#FAEEDA' },
+const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  active:     { label: 'Active',     color: '#0C447C', bg: '#E6F1FB' },
+  resolved:   { label: 'Resolved',   color: '#085041', bg: '#E1F5EE' },
+  watching:   { label: 'Watching',   color: '#633806', bg: '#FAEEDA' },
+  planned:    { label: 'Planned',    color: '#3C3489', bg: '#EEEDFE' },
+  monitoring: { label: 'Monitoring', color: '#633806', bg: '#FAEEDA' },
 }
 
 const SENTIMENT_DOT: Record<string, string> = {
@@ -34,9 +35,7 @@ export default function ClusterView({ initialClusters }: Props) {
   const [loadingSubs, setLoadingSubs] = useState(false)
   const [runningClustering, setRunningClustering] = useState(false)
   const [clusterResult, setClusterResult] = useState<string | null>(null)
-  const [linkSearchId, setLinkSearchId] = useState<string | null>(null)
-  const [linkQuery, setLinkQuery] = useState('')
-  const [linkResults, setLinkResults] = useState<{ id: string; title: string; column: string }[]>([])
+  const [graduatingId, setGraduatingId] = useState<string | null>(null)
 
   async function handleExpand(clusterId: string) {
     if (expandedId === clusterId) {
@@ -65,21 +64,20 @@ export default function ClusterView({ initialClusters }: Props) {
     setClusters(clusters.map((c) => c.id === id ? { ...c, status } : c))
   }
 
-  async function handleLinkSearch(query: string) {
-    setLinkQuery(query)
-    if (query.trim().length > 1) {
-      const results = await searchInitiativesForAction(query)
-      setLinkResults(results)
-    } else {
-      setLinkResults([])
+  async function handleGraduateToBacklog(clusterId: string, status: 'backlog' | 'watching') {
+    setGraduatingId(clusterId)
+    const watchUntil = status === 'watching'
+      ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+      : undefined
+    const item = await graduateClusterToBacklog(clusterId, status, watchUntil)
+    if (item) {
+      setClusters(clusters.map((c) => c.id === clusterId ? {
+        ...c,
+        backlog_item_id: item.id,
+        status: (status === 'watching' ? 'monitoring' : 'planned') as ClusterStatus,
+      } : c))
     }
-  }
-
-  async function handleLinkInitiative(clusterId: string, initiativeId: string) {
-    await updateCluster(clusterId, { linked_initiative_id: initiativeId })
-    setClusters(clusters.map((c) => c.id === clusterId ? { ...c, linked_initiative_id: initiativeId } : c))
-    setLinkSearchId(null)
-    setLinkQuery('')
+    setGraduatingId(null)
   }
 
   return (
@@ -101,11 +99,17 @@ export default function ClusterView({ initialClusters }: Props) {
         </span>
       </div>
 
+      {/* Note about backlog flow */}
+      <p className="text-[11px] text-neutral-400 mb-4">
+        Items go to the problem backlog first, then to the roadmap.
+      </p>
+
       {/* Cluster cards */}
       <div className="space-y-2">
         {clusters.map((cluster) => {
           const statusCfg = STATUS_CONFIG[cluster.status] ?? STATUS_CONFIG.active
           const isExpanded = expandedId === cluster.id
+          const hasBacklog = !!cluster.backlog_item_id
           return (
             <div key={cluster.id} className="border border-neutral-200 rounded-lg overflow-hidden">
               <button
@@ -151,57 +155,42 @@ export default function ClusterView({ initialClusters }: Props) {
                 <div className="px-4 pb-4 border-t border-neutral-100">
                   {/* Actions */}
                   <div className="flex items-center gap-2 py-3 flex-wrap">
-                    <select
-                      value={cluster.status}
-                      onChange={(e) => handleStatusChange(cluster.id, e.target.value as ClusterStatus)}
-                      className="text-[11px] font-medium px-2 py-1 rounded border border-neutral-200 bg-white outline-none"
-                    >
-                      <option value="active">Active</option>
-                      <option value="watching">Watching</option>
-                      <option value="resolved">Resolved</option>
-                    </select>
+                    {!hasBacklog ? (
+                      <>
+                        <select
+                          value={cluster.status}
+                          onChange={(e) => handleStatusChange(cluster.id, e.target.value as ClusterStatus)}
+                          className="text-[11px] font-medium px-2 py-1 rounded border border-neutral-200 bg-white outline-none"
+                        >
+                          <option value="active">Active</option>
+                          <option value="watching">Watching</option>
+                          <option value="resolved">Resolved</option>
+                        </select>
 
-                    <div className="relative">
-                      <button
-                        onClick={() => {
-                          setLinkSearchId(linkSearchId === cluster.id ? null : cluster.id)
-                          setLinkQuery('')
-                          setLinkResults([])
-                        }}
-                        className="text-[11px] font-medium px-2.5 py-1 rounded border border-neutral-200 text-neutral-600 hover:border-neutral-300"
+                        <button
+                          onClick={() => handleGraduateToBacklog(cluster.id, 'backlog')}
+                          disabled={graduatingId === cluster.id}
+                          className="text-[11px] font-medium px-2.5 py-1 rounded border border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 transition-colors disabled:opacity-40"
+                        >
+                          {graduatingId === cluster.id ? 'Graduating...' : 'Add to backlog'}
+                        </button>
+
+                        <button
+                          onClick={() => handleGraduateToBacklog(cluster.id, 'watching')}
+                          disabled={graduatingId === cluster.id}
+                          className="text-[11px] font-medium px-2.5 py-1 rounded border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors disabled:opacity-40"
+                        >
+                          Watch for 30 days
+                        </button>
+                      </>
+                    ) : (
+                      <a
+                        href="/feedback/backlog"
+                        className="text-[11px] font-medium px-2.5 py-1 rounded border border-green-200 text-green-700 bg-green-50 hover:bg-green-100 transition-colors"
                       >
-                        {cluster.linked_initiative_id ? 'Re-link initiative' : 'Link initiative'}
-                      </button>
-                      {linkSearchId === cluster.id && (
-                        <div className="absolute top-full left-0 mt-1 w-[280px] bg-white border border-neutral-200 rounded-lg shadow-lg z-30 p-2">
-                          <input
-                            type="text"
-                            value={linkQuery}
-                            onChange={(e) => handleLinkSearch(e.target.value)}
-                            placeholder="Search initiatives..."
-                            className="w-full text-[12px] border border-neutral-200 rounded px-2 py-1.5 outline-none focus:border-neutral-400 mb-1"
-                            autoFocus
-                          />
-                          {linkResults.length > 0 ? (
-                            <div className="max-h-[200px] overflow-y-auto space-y-0.5">
-                              {linkResults.map((init) => (
-                                <button
-                                  key={init.id}
-                                  onClick={() => handleLinkInitiative(cluster.id, init.id)}
-                                  className="w-full text-left text-[11px] px-2 py-1.5 rounded hover:bg-neutral-50 truncate"
-                                >
-                                  {init.title} <span className="text-neutral-400">({init.column})</span>
-                                </button>
-                              ))}
-                            </div>
-                          ) : linkQuery.trim() ? (
-                            <p className="text-[11px] text-neutral-400 px-2 py-1">No matches</p>
-                          ) : (
-                            <p className="text-[11px] text-neutral-400 px-2 py-1">Type to search...</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                        View in backlog &rarr;
+                      </a>
+                    )}
                   </div>
 
                   {/* Submissions list */}

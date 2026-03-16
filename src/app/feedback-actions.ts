@@ -1,9 +1,9 @@
 'use server'
 
 import { db } from '@/db'
-import { feedbackSubmissions, researchParticipants, activityLog, initiatives, feedbackClusters, researchSessions } from '@/db/schema'
-import { eq, desc, sql, asc, and, ilike, isNull, isNotNull } from 'drizzle-orm'
-import type { FeedbackSubmission, FeedbackStatus, FeedbackCategory, UserType, ResearchParticipant, FeedbackCluster, ClusterStatus, ResearchSession, SessionType } from '@/types'
+import { feedbackSubmissions, researchParticipants, activityLog, initiatives, feedbackClusters, researchSessions, problemBacklog, agentRunLog, strategicLevels } from '@/db/schema'
+import { eq, desc, sql, asc, and, ilike, isNull, isNotNull, lte, gte } from 'drizzle-orm'
+import type { FeedbackSubmission, FeedbackStatus, FeedbackCategory, UserType, ResearchParticipant, FeedbackCluster, ClusterStatus, ResearchSession, SessionType, ProblemBacklogItem, BacklogStatus, AgentRunLogEntry } from '@/types'
 
 // ─── Submission ───
 
@@ -552,6 +552,7 @@ export async function getClusters(): Promise<FeedbackCluster[]> {
     top_urgency: r.top_urgency,
     status: r.status as ClusterStatus,
     linked_initiative_id: r.linked_initiative_id,
+    backlog_item_id: r.backlog_item_id,
     created_at: r.created_at!,
     updated_at: r.updated_at!,
   }))
@@ -842,5 +843,485 @@ export async function getVoiceDigestData() {
     unreviewedCount: unreviewedCount?.count ?? 0,
     topClusters: clusters.map((c) => ({ label: c.label, count: c.submission_count ?? 0 })),
     sentiments,
+  }
+}
+
+// ─── Problem Backlog ───
+
+export async function graduateClusterToBacklog(
+  clusterId: string,
+  status: 'backlog' | 'watching',
+  watchUntil?: string,
+): Promise<ProblemBacklogItem | null> {
+  const [cluster] = await db.select().from(feedbackClusters).where(eq(feedbackClusters.id, clusterId))
+  if (!cluster) return null
+
+  // Count research candidates linked to this cluster
+  const clusterSubs = await db.select({ email: feedbackSubmissions.email, research_opt_in: feedbackSubmissions.research_opt_in })
+    .from(feedbackSubmissions).where(eq(feedbackSubmissions.cluster_id!, clusterId))
+  const researchCount = clusterSubs.filter((s) => s.research_opt_in).length
+
+  // Get a representative quote
+  const [topSub] = await db.select({ body: feedbackSubmissions.body })
+    .from(feedbackSubmissions).where(eq(feedbackSubmissions.cluster_id!, clusterId))
+    .orderBy(desc(feedbackSubmissions.created_at)).limit(1)
+
+  // Generate priority signal via AI
+  const prioritySignal = await generatePrioritySignal(
+    cluster.label,
+    cluster.description ?? '',
+    cluster.submission_count ?? 0,
+    cluster.theme ?? 'Other',
+  )
+
+  const [item] = await db.insert(problemBacklog).values({
+    title: cluster.label,
+    description: cluster.description ?? '',
+    evidence: `${cluster.submission_count ?? 0} user submissions in this cluster`,
+    strategic_area: cluster.theme || 'Other',
+    status,
+    watch_until: watchUntil || null,
+    source_cluster_id: clusterId,
+    submission_count: cluster.submission_count ?? 0,
+    research_candidate_count: researchCount,
+    representative_quote: topSub?.body?.slice(0, 200) ?? '',
+    priority_signal: prioritySignal,
+  }).returning()
+
+  // Update cluster
+  await db.update(feedbackClusters).set({
+    backlog_item_id: item.id,
+    status: status === 'watching' ? 'monitoring' : 'planned',
+    updated_at: new Date(),
+  }).where(eq(feedbackClusters.id, clusterId))
+
+  await db.insert(activityLog).values({
+    action: 'backlog_created',
+    entity_type: 'problem_backlog',
+    entity_id: item.id,
+    metadata: JSON.stringify({ cluster_id: clusterId, status }),
+  })
+
+  return {
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    evidence: item.evidence ?? '',
+    strategic_area: item.strategic_area,
+    status: item.status as BacklogStatus,
+    watch_until: item.watch_until,
+    declined_reason: item.declined_reason ?? '',
+    declined_at: item.declined_at,
+    promoted_at: item.promoted_at,
+    roadmap_initiative_id: item.roadmap_initiative_id,
+    source_cluster_id: item.source_cluster_id,
+    submission_count: item.submission_count ?? 0,
+    research_candidate_count: item.research_candidate_count ?? 0,
+    representative_quote: item.representative_quote ?? '',
+    pm_notes: item.pm_notes ?? '',
+    priority_signal: item.priority_signal ?? '',
+    created_at: item.created_at!,
+    updated_at: item.updated_at!,
+  }
+}
+
+async function generatePrioritySignal(
+  title: string, description: string, count: number, area: string,
+): Promise<string> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return ''
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 128,
+        messages: [{
+          role: 'user',
+          content: `In one sentence, explain why this problem might be worth prioritising for a restaurant deal subscription app.\nCluster: ${title}\nDescription: ${description}\nSubmissions: ${count} users described this problem\nStrategic area: ${area}\nRespond with only the sentence, no preamble.`,
+        }],
+      }),
+    })
+    if (!response.ok) return ''
+    const result = await response.json()
+    return result.content?.[0]?.text?.trim() ?? ''
+  } catch {
+    return ''
+  }
+}
+
+export async function getProblemBacklog(filters?: {
+  status?: BacklogStatus
+  strategic_area?: string
+}): Promise<ProblemBacklogItem[]> {
+  const conditions = []
+  if (filters?.status) conditions.push(eq(problemBacklog.status, filters.status))
+  if (filters?.strategic_area) conditions.push(eq(problemBacklog.strategic_area, filters.strategic_area))
+
+  const rows = conditions.length > 0
+    ? await db.select().from(problemBacklog).where(and(...conditions)).orderBy(desc(problemBacklog.submission_count))
+    : await db.select().from(problemBacklog).orderBy(desc(problemBacklog.submission_count))
+
+  // Get joined data
+  const result: ProblemBacklogItem[] = []
+  for (const r of rows) {
+    let initiative_title: string | undefined
+    let cluster_label: string | undefined
+
+    if (r.roadmap_initiative_id) {
+      const [init] = await db.select({ title: initiatives.title }).from(initiatives).where(eq(initiatives.id, r.roadmap_initiative_id))
+      initiative_title = init?.title
+    }
+    if (r.source_cluster_id) {
+      const [cl] = await db.select({ label: feedbackClusters.label }).from(feedbackClusters).where(eq(feedbackClusters.id, r.source_cluster_id))
+      cluster_label = cl?.label
+    }
+
+    result.push({
+      id: r.id,
+      title: r.title,
+      description: r.description,
+      evidence: r.evidence ?? '',
+      strategic_area: r.strategic_area,
+      status: r.status as BacklogStatus,
+      watch_until: r.watch_until,
+      declined_reason: r.declined_reason ?? '',
+      declined_at: r.declined_at,
+      promoted_at: r.promoted_at,
+      roadmap_initiative_id: r.roadmap_initiative_id,
+      source_cluster_id: r.source_cluster_id,
+      submission_count: r.submission_count ?? 0,
+      research_candidate_count: r.research_candidate_count ?? 0,
+      representative_quote: r.representative_quote ?? '',
+      pm_notes: r.pm_notes ?? '',
+      priority_signal: r.priority_signal ?? '',
+      created_at: r.created_at!,
+      updated_at: r.updated_at!,
+      initiative_title,
+      cluster_label,
+    })
+  }
+
+  return result
+}
+
+export async function getBacklogCounts() {
+  const all = await db.select({ status: problemBacklog.status }).from(problemBacklog)
+  const watching = all.filter((r) => r.status === 'watching').length
+  const backlog = all.filter((r) => r.status === 'backlog').length
+  const promoted = all.filter((r) => r.status === 'promoted').length
+  const declined = all.filter((r) => r.status === 'declined').length
+  const watchingDue = await getWatchingItemsDue()
+  return { watching, backlog, promoted, declined, watchingDueCount: watchingDue.length }
+}
+
+export async function updateBacklogItem(id: string, fields: {
+  title?: string
+  description?: string
+  evidence?: string
+  strategic_area?: string
+  pm_notes?: string
+  watch_until?: string | null
+}) {
+  await db.update(problemBacklog).set({
+    ...fields,
+    updated_at: new Date(),
+  }).where(eq(problemBacklog.id, id))
+
+  await db.insert(activityLog).values({
+    action: 'backlog_updated',
+    entity_type: 'problem_backlog',
+    entity_id: id,
+    metadata: JSON.stringify(fields),
+  })
+}
+
+export async function setBacklogStatus(id: string, status: BacklogStatus, options?: {
+  reason?: string
+  watchUntil?: string
+}) {
+  const updates: Record<string, unknown> = { status, updated_at: new Date() }
+
+  if (status === 'declined') {
+    updates.declined_reason = options?.reason ?? ''
+    updates.declined_at = new Date()
+  } else if (status === 'watching') {
+    updates.watch_until = options?.watchUntil ?? null
+  } else if (status === 'backlog') {
+    updates.watch_until = null
+  }
+
+  await db.update(problemBacklog).set(updates).where(eq(problemBacklog.id, id))
+
+  await db.insert(activityLog).values({
+    action: `backlog_${status}`,
+    entity_type: 'problem_backlog',
+    entity_id: id,
+    metadata: JSON.stringify({ status, ...options }),
+  })
+}
+
+export async function promoteBacklogToRoadmap(
+  id: string,
+  column: string,
+  criterion: string,
+  strategicLevelId: string,
+) {
+  const [item] = await db.select().from(problemBacklog).where(eq(problemBacklog.id, id))
+  if (!item) return null
+
+  // Get max position in target column
+  const [maxPos] = await db.select({ max: sql<number>`COALESCE(MAX(position), 0)` })
+    .from(initiatives).where(eq(initiatives.column, column))
+
+  const [newInitiative] = await db.insert(initiatives).values({
+    title: item.title,
+    subtitle: item.description,
+    criterion,
+    strategic_level_id: strategicLevelId,
+    column,
+    position: (maxPos?.max ?? 0) + 1,
+    dep_note: `Source: Voice feedback — ${item.submission_count} user submissions`,
+  }).returning()
+
+  // Update backlog item
+  await db.update(problemBacklog).set({
+    status: 'promoted',
+    promoted_at: new Date(),
+    roadmap_initiative_id: newInitiative.id,
+    updated_at: new Date(),
+  }).where(eq(problemBacklog.id, id))
+
+  // Update linked cluster if exists
+  if (item.source_cluster_id) {
+    await db.update(feedbackClusters).set({
+      status: 'planned',
+      linked_initiative_id: newInitiative.id,
+      updated_at: new Date(),
+    }).where(eq(feedbackClusters.id, item.source_cluster_id))
+  }
+
+  await db.insert(activityLog).values({
+    action: 'backlog_promoted',
+    entity_type: 'problem_backlog',
+    entity_id: id,
+    metadata: JSON.stringify({ initiative_id: newInitiative.id, column, criterion }),
+  })
+
+  return newInitiative
+}
+
+export async function declineBacklogItem(id: string, reason: string) {
+  await setBacklogStatus(id, 'declined', { reason })
+}
+
+export async function getWatchingItemsDue(): Promise<ProblemBacklogItem[]> {
+  const today = new Date().toISOString().split('T')[0]
+  const rows = await db.select().from(problemBacklog)
+    .where(and(
+      eq(problemBacklog.status, 'watching'),
+      lte(problemBacklog.watch_until, today),
+    ))
+
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    description: r.description,
+    evidence: r.evidence ?? '',
+    strategic_area: r.strategic_area,
+    status: r.status as BacklogStatus,
+    watch_until: r.watch_until,
+    declined_reason: r.declined_reason ?? '',
+    declined_at: r.declined_at,
+    promoted_at: r.promoted_at,
+    roadmap_initiative_id: r.roadmap_initiative_id,
+    source_cluster_id: r.source_cluster_id,
+    submission_count: r.submission_count ?? 0,
+    research_candidate_count: r.research_candidate_count ?? 0,
+    representative_quote: r.representative_quote ?? '',
+    pm_notes: r.pm_notes ?? '',
+    priority_signal: r.priority_signal ?? '',
+    created_at: r.created_at!,
+    updated_at: r.updated_at!,
+  }))
+}
+
+// ─── Strategic Levels (for promote modal) ───
+
+export async function getStrategicLevelsForSelect() {
+  const rows = await db.select({ id: strategicLevels.id, name: strategicLevels.name })
+    .from(strategicLevels).orderBy(asc(strategicLevels.position))
+  return rows
+}
+
+// ─── Agent Run Log ───
+
+export async function getAgentRunHistory(): Promise<AgentRunLogEntry[]> {
+  const rows = await db.select().from(agentRunLog).orderBy(desc(agentRunLog.created_at)).limit(30)
+  return rows.map((r) => ({
+    id: r.id,
+    run_date: r.run_date,
+    report: r.report,
+    slack_posted: r.slack_posted ?? false,
+    created_at: r.created_at!,
+  }))
+}
+
+// ─── Trend Stats ───
+
+export async function getFeedbackTrendData() {
+  const now = new Date()
+  const twelveWeeksAgo = new Date(now.getTime() - 12 * 7 * 24 * 60 * 60 * 1000)
+
+  // Weekly submission counts by strategic area (using cluster theme)
+  const weeklyRows = await db.select({
+    week: sql<string>`to_char(date_trunc('week', ${feedbackSubmissions.created_at}), 'IYYY-IW')`,
+    cluster_id: feedbackSubmissions.cluster_id,
+    count: sql<number>`count(*)::int`,
+  }).from(feedbackSubmissions)
+    .where(gte(feedbackSubmissions.created_at, twelveWeeksAgo))
+    .groupBy(sql`date_trunc('week', ${feedbackSubmissions.created_at})`, feedbackSubmissions.cluster_id)
+
+  // Map cluster_id to strategic area
+  const clusterMap = new Map<string, string>()
+  const allClusters = await db.select({ id: feedbackClusters.id, theme: feedbackClusters.theme })
+    .from(feedbackClusters)
+  for (const c of allClusters) clusterMap.set(c.id, c.theme || 'Other')
+
+  // Build weekly by area
+  const weeklyByArea: Record<string, Record<string, number>> = {}
+  for (const row of weeklyRows) {
+    if (!weeklyByArea[row.week]) weeklyByArea[row.week] = { Discovery: 0, Churn: 0, 'Trial conversion': 0, Partner: 0, Other: 0 }
+    const area = row.cluster_id ? (clusterMap.get(row.cluster_id) || 'Other') : 'Other'
+    const normalizedArea = ['Discovery', 'Churn', 'Trial conversion', 'Partner'].includes(area) ? area : 'Other'
+    weeklyByArea[row.week][normalizedArea] += row.count
+  }
+
+  const weeks = Object.keys(weeklyByArea).sort()
+  const weeklyByAreaArr = weeks.map((w) => ({ week: w, ...weeklyByArea[w] }))
+
+  // Cluster velocity — top clusters by total submissions
+  const topClusters = await db.select().from(feedbackClusters)
+    .orderBy(desc(feedbackClusters.submission_count))
+    .limit(10)
+
+  const clusterVelocity = []
+  for (const cluster of topClusters) {
+    const weeklyData = await db.select({
+      week: sql<string>`to_char(date_trunc('week', ${feedbackSubmissions.created_at}), 'IYYY-IW')`,
+      count: sql<number>`count(*)::int`,
+    }).from(feedbackSubmissions)
+      .where(and(
+        eq(feedbackSubmissions.cluster_id!, cluster.id),
+        gte(feedbackSubmissions.created_at, twelveWeeksAgo),
+      ))
+      .groupBy(sql`date_trunc('week', ${feedbackSubmissions.created_at})`)
+
+    const weeklyCounts = weeks.map((w) => ({
+      week: w,
+      count: weeklyData.find((d) => d.week === w)?.count ?? 0,
+    }))
+
+    const lastFour = weeklyCounts.slice(-4)
+    const prevFour = weeklyCounts.slice(-8, -4)
+    const lastSum = lastFour.reduce((s, w) => s + w.count, 0)
+    const prevSum = prevFour.reduce((s, w) => s + w.count, 0)
+    const trend = lastSum > prevSum * 1.2 ? 'growing' as const
+      : lastSum < prevSum * 0.8 ? 'declining' as const
+      : 'stable' as const
+
+    clusterVelocity.push({
+      clusterId: cluster.id,
+      clusterTitle: cluster.label,
+      weeklyCounts,
+      trend,
+    })
+  }
+
+  // Quality distribution over time
+  const qualityRows = await db.select({
+    week: sql<string>`to_char(date_trunc('week', ${feedbackSubmissions.created_at}), 'IYYY-IW')`,
+    ai_triage: feedbackSubmissions.ai_triage,
+  }).from(feedbackSubmissions)
+    .where(and(
+      gte(feedbackSubmissions.created_at, twelveWeeksAgo),
+      isNotNull(feedbackSubmissions.ai_triage),
+    ))
+
+  const qualityByWeek: Record<string, { total: number; sum: number }> = {}
+  for (const row of qualityRows) {
+    try {
+      const triage = JSON.parse(row.ai_triage ?? '{}')
+      if (triage.quality_score) {
+        if (!qualityByWeek[row.week]) qualityByWeek[row.week] = { total: 0, sum: 0 }
+        qualityByWeek[row.week].total++
+        qualityByWeek[row.week].sum += triage.quality_score
+      }
+    } catch {}
+  }
+
+  const qualityOverTime = weeks.map((w) => ({
+    week: w,
+    avgScore: qualityByWeek[w] ? Math.round((qualityByWeek[w].sum / qualityByWeek[w].total) * 10) / 10 : 0,
+    total: qualityByWeek[w]?.total ?? 0,
+  }))
+
+  // System health
+  const [totalSubs] = await db.select({ count: sql<number>`count(*)::int` }).from(feedbackSubmissions)
+  const [totalClusters] = await db.select({ count: sql<number>`count(*)::int` }).from(feedbackClusters)
+  const [openClusters] = await db.select({ count: sql<number>`count(*)::int` }).from(feedbackClusters)
+    .where(eq(feedbackClusters.status, 'active'))
+  const [backlogCount] = await db.select({ count: sql<number>`count(*)::int` }).from(problemBacklog)
+  const [promotedCount] = await db.select({ count: sql<number>`count(*)::int` }).from(problemBacklog)
+    .where(eq(problemBacklog.status, 'promoted'))
+  const [respondedClusters] = await db.select({ count: sql<number>`count(*)::int` })
+    .from(feedbackClusters)
+    .where(isNotNull(feedbackClusters.backlog_item_id))
+
+  const totalClusterCount = totalClusters?.count ?? 0
+  const respondedCount = respondedClusters?.count ?? 0
+  const responseRate = totalClusterCount > 0 ? Math.round((respondedCount / totalClusterCount) * 100) : 0
+
+  // Backlog flow (last 30 days)
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+  const [graduatedLast30] = await db.select({ count: sql<number>`count(*)::int` })
+    .from(problemBacklog).where(gte(problemBacklog.created_at, thirtyDaysAgo))
+  const [promotedLast30] = await db.select({ count: sql<number>`count(*)::int` })
+    .from(problemBacklog).where(and(eq(problemBacklog.status, 'promoted'), gte(problemBacklog.promoted_at, thirtyDaysAgo)))
+  const [declinedLast30] = await db.select({ count: sql<number>`count(*)::int` })
+    .from(problemBacklog).where(and(eq(problemBacklog.status, 'declined'), gte(problemBacklog.declined_at, thirtyDaysAgo)))
+  const [currentlyWatching] = await db.select({ count: sql<number>`count(*)::int` })
+    .from(problemBacklog).where(eq(problemBacklog.status, 'watching'))
+  const [currentlyBacklog] = await db.select({ count: sql<number>`count(*)::int` })
+    .from(problemBacklog).where(eq(problemBacklog.status, 'backlog'))
+
+  // Research candidate count
+  const [researchCount] = await db.select({ count: sql<number>`count(*)::int` }).from(researchParticipants)
+
+  return {
+    weeklyByArea: weeklyByAreaArr,
+    clusterVelocity,
+    qualityOverTime,
+    health: {
+      totalSubmissions: totalSubs?.count ?? 0,
+      totalClusters: totalClusterCount,
+      openClusters: openClusters?.count ?? 0,
+      responseRate,
+      backlogItems: backlogCount?.count ?? 0,
+      promotedToRoadmap: promotedCount?.count ?? 0,
+      researchCandidates: researchCount?.count ?? 0,
+    },
+    backlogFlow: {
+      graduated_last_30: graduatedLast30?.count ?? 0,
+      promoted_last_30: promotedLast30?.count ?? 0,
+      declined_last_30: declinedLast30?.count ?? 0,
+      currently_watching: currentlyWatching?.count ?? 0,
+      currently_backlog: currentlyBacklog?.count ?? 0,
+    },
   }
 }

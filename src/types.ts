@@ -189,7 +189,7 @@ export interface ResearchParticipant {
   created_at: Date
 }
 
-export type ClusterStatus = 'active' | 'resolved' | 'watching'
+export type ClusterStatus = 'active' | 'resolved' | 'watching' | 'planned' | 'monitoring'
 
 export interface FeedbackCluster {
   id: string
@@ -201,8 +201,44 @@ export interface FeedbackCluster {
   top_urgency: string | null
   status: ClusterStatus
   linked_initiative_id: string | null
+  backlog_item_id: string | null
   created_at: Date
   updated_at: Date
+}
+
+export type BacklogStatus = 'watching' | 'backlog' | 'promoted' | 'declined'
+
+export interface ProblemBacklogItem {
+  id: string
+  title: string
+  description: string
+  evidence: string
+  strategic_area: string
+  status: BacklogStatus
+  watch_until: string | null
+  declined_reason: string
+  declined_at: Date | null
+  promoted_at: Date | null
+  roadmap_initiative_id: string | null
+  source_cluster_id: string | null
+  submission_count: number
+  research_candidate_count: number
+  representative_quote: string
+  pm_notes: string
+  priority_signal: string
+  created_at: Date
+  updated_at: Date
+  // Joined fields
+  initiative_title?: string
+  cluster_label?: string
+}
+
+export interface AgentRunLogEntry {
+  id: string
+  run_date: string
+  report: string
+  slack_posted: boolean
+  created_at: Date
 }
 
 export type SessionType = 'interview' | 'survey' | 'usability_test'

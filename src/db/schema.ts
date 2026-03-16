@@ -185,6 +185,28 @@ export const feedbackSubmissions = pgTable('feedback_submissions', {
   reviewed_by: text('reviewed_by'),
 })
 
+export const problemBacklog = pgTable('problem_backlog', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  evidence: text('evidence').default(''),
+  strategic_area: text('strategic_area').notNull(),
+  status: text('status').default('backlog'),
+  watch_until: date('watch_until'),
+  declined_reason: text('declined_reason').default(''),
+  declined_at: timestamp('declined_at'),
+  promoted_at: timestamp('promoted_at'),
+  roadmap_initiative_id: uuid('roadmap_initiative_id').references(() => initiatives.id),
+  source_cluster_id: uuid('source_cluster_id'),
+  submission_count: integer('submission_count').default(0),
+  research_candidate_count: integer('research_candidate_count').default(0),
+  representative_quote: text('representative_quote').default(''),
+  pm_notes: text('pm_notes').default(''),
+  priority_signal: text('priority_signal').default(''),
+  created_at: timestamp('created_at').defaultNow(),
+  updated_at: timestamp('updated_at').defaultNow(),
+})
+
 export const feedbackClusters = pgTable('feedback_clusters', {
   id: uuid('id').defaultRandom().primaryKey(),
   label: text('label').notNull(),
@@ -195,8 +217,17 @@ export const feedbackClusters = pgTable('feedback_clusters', {
   top_urgency: text('top_urgency'),
   status: text('status').notNull().default('active'),
   linked_initiative_id: uuid('linked_initiative_id').references(() => initiatives.id),
+  backlog_item_id: uuid('backlog_item_id'),
   created_at: timestamp('created_at').defaultNow(),
   updated_at: timestamp('updated_at').defaultNow(),
+})
+
+export const agentRunLog = pgTable('agent_run_log', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  run_date: date('run_date').notNull(),
+  report: text('report').notNull(),
+  slack_posted: boolean('slack_posted').default(false),
+  created_at: timestamp('created_at').defaultNow(),
 })
 
 export const researchParticipants = pgTable('research_participants', {

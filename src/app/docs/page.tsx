@@ -197,6 +197,21 @@ export default function DocsPage() {
           <p style={bodyStyle}>
             Users who opt in to research are added to the participant pool at <Link href="/feedback/participants" className="text-[#5E6AD2] hover:underline">/feedback/participants</Link>. The product team can tag participants, track contact history, schedule research sessions, and see all feedback submitted by a specific user. This turns Voice into a recruitment pipeline for user research.
           </p>
+
+          <h2 style={h2Style}>The problem backlog</h2>
+          <p style={bodyStyle}>
+            Voice clusters do not go directly to the roadmap. When a PM decides a cluster represents a real, validated problem, they graduate it to the problem backlog &mdash; a staging layer that sits between Voice and the roadmap. Items in the backlog have three possible states: Watching (growing signal, not yet validated), Backlog (validated problem, not yet sequenced), or Declined (explicitly not pursuing, with a reason). Only when a backlog item is promoted does it become a roadmap initiative, with a column, criterion, and strategic level assigned. This keeps the roadmap Parked column clean &mdash; it holds deprioritised initiatives, not raw unvalidated problems.
+          </p>
+
+          <h2 style={h2Style}>The daily agent</h2>
+          <p style={bodyStyle}>
+            A daily cron job (runs at 06:00 UTC) processes the previous day&apos;s submissions, recalculates cluster trends, and checks for anomalies &mdash; spikes, new clusters that match existing roadmap initiatives, declined clusters that are reappearing, and high-quality submissions that couldn&apos;t be clustered automatically. If anything noteworthy is found, it posts a briefing to the product Slack channel. The agent prepares information; it makes no decisions. All judgment stays with PMs.
+          </p>
+
+          <h2 style={h2Style}>Trend stats</h2>
+          <p style={bodyStyle}>
+            The <Link href="/feedback/trends" className="text-[#5E6AD2] hover:underline">/feedback/trends</Link> page shows submission volume by strategic area over time, cluster velocity charts, submission quality trends, and system health metrics including response rate. The most important health metric is response rate &mdash; the percentage of clusters that have received a user-facing response. If this drops below 50%, the 30-day commitment is at risk.
+          </p>
         </section>
 
         <SectionDivider />
@@ -278,6 +293,8 @@ export default function DocsPage() {
             <li style={liStyle}>&ndash; At least 5 meaningful clusters identified and reviewed by the product team</li>
             <li style={liStyle}>&ndash; At least 1 roadmap initiative directly informed by a Voice cluster</li>
             <li style={liStyle}>&ndash; 30+ research participants recruited through the opt-in flow</li>
+            <li style={liStyle}>&ndash; Response rate above 70% &mdash; more than two-thirds of clusters have had a response sent to users</li>
+            <li style={liStyle}>&ndash; Daily agent has flagged at least one anomaly that led to a PM action</li>
           </ul>
 
           <h2 style={h2Style}>At 6 months</h2>
@@ -313,6 +330,9 @@ export default function DocsPage() {
               ['/feedback', 'Internal inbox. Where the product team reviews and triages submissions.'],
               ['/feedback/participants', 'Research participant list. Tagging, contact tracking, session history.'],
               ['/docs', 'This page. Internal documentation for the Voice system.'],
+              ['/feedback/backlog', 'Problem backlog staging layer between clusters and roadmap.'],
+              ['/feedback/trends', 'Trend charts and system health metrics.'],
+              ['/feedback/agent', 'Daily agent run history and manual trigger.'],
               ['/stats', 'Stats page. Includes Voice metrics alongside roadmap analytics.'],
               ['/how-it-works', 'How this roadmap works page. Includes a section on Voice.'],
             ]}
@@ -349,6 +369,41 @@ export default function DocsPage() {
           <p style={bodyStyle}>
             The form, the confirmation email, the status page, and the update emails all use the same tone: we read everything, we take it seriously, and we will tell you what we decided. We never imply that submitting feedback guarantees that something will be built. The commitment is to listen and respond, not to comply.
           </p>
+        </section>
+
+        <SectionDivider />
+
+        {/* ─── Section 10 — Changelog ─── */}
+        <section>
+          <h1 id="changelog" style={h1Style}>Documentation changelog</h1>
+          <p style={{ ...bodyStyle, marginBottom: 16 }}>A record of updates to this document.</p>
+
+          {/* Add a new entry at the TOP whenever this document is updated.
+              Keep entries factual and brief — what changed and which sections. */}
+          {[
+            {
+              date: '2026-03-17',
+              summary: 'Added problem backlog, daily agent, and trend stats sections.',
+              sections_updated: ['How it works', 'What success looks like', 'Where to find things'],
+            },
+            {
+              date: '2026-03-16',
+              summary: 'Initial documentation published covering all three Voice build phases.',
+              sections_updated: ['All'],
+            },
+          ].map((entry, i) => (
+            <div key={i} style={{ marginBottom: 12, padding: '8px 0', borderBottom: '0.5px solid var(--color-border-tertiary, #e5e5e5)' }}>
+              <div style={{ fontSize: 11, color: 'var(--color-text-tertiary, #999)', marginBottom: 4 }}>{entry.date}</div>
+              <div style={{ fontSize: 13, color: 'var(--color-text-primary, #333)', marginBottom: 6 }}>{entry.summary}</div>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
+                {entry.sections_updated.map((s) => (
+                  <span key={s} style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, backgroundColor: 'var(--color-background-secondary, #f5f5f5)', color: 'var(--color-text-tertiary, #999)' }}>
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
         </section>
 
         {/* Footer */}
