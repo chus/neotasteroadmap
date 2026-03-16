@@ -200,23 +200,107 @@ export async function updateLinearProject(
   return data.projectUpdate.project
 }
 
-export async function getLinearProject(id: string): Promise<LinearProject & { updatedAt: string }> {
+export interface LinearProjectDetail {
+  id: string
+  name: string
+  description: string | null
+  state: string
+  url: string
+  progress: number
+  startDate: string | null
+  targetDate: string | null
+  updatedAt: string
+  lead: { name: string } | null
+  members: { name: string }[]
+  projectUpdates: {
+    id: string
+    body: string
+    createdAt: string
+    authorName: string
+    health: string | null
+  }[]
+  milestone: { name: string; targetDate: string } | null
+}
+
+export async function getLinearProject(id: string): Promise<LinearProjectDetail> {
   const data = await linearFetch<{
-    project: LinearProject & { updatedAt: string }
+    project: {
+      id: string
+      name: string
+      description: string | null
+      state: string
+      url: string
+      progress: number
+      startDate: string | null
+      targetDate: string | null
+      updatedAt: string
+      lead: { name: string } | null
+      members: { nodes: { name: string }[] }
+      projectUpdates: { nodes: { id: string; body: string; createdAt: string; user: { name: string }; health: string | null }[] }
+      projectMilestones: { nodes: { name: string; targetDate: string }[] }
+    }
   }>(
     `query($id: String!) {
       project(id: $id) {
         id
         name
+        description
         state
         url
+        progress
+        startDate
         targetDate
-        description
         updatedAt
+        lead {
+          name
+        }
+        members {
+          nodes {
+            name
+          }
+        }
+        projectUpdates(first: 5) {
+          nodes {
+            id
+            body
+            createdAt
+            user {
+              name
+            }
+            health
+          }
+        }
+        projectMilestones(first: 1) {
+          nodes {
+            name
+            targetDate
+          }
+        }
       }
     }`,
     { id }
   )
 
-  return data.project
+  const p = data.project
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    state: p.state,
+    url: p.url,
+    progress: p.progress ?? 0,
+    startDate: p.startDate,
+    targetDate: p.targetDate,
+    updatedAt: p.updatedAt,
+    lead: p.lead,
+    members: p.members?.nodes ?? [],
+    projectUpdates: (p.projectUpdates?.nodes ?? []).map((u) => ({
+      id: u.id,
+      body: u.body,
+      createdAt: u.createdAt,
+      authorName: u.user?.name ?? 'Unknown',
+      health: u.health,
+    })),
+    milestone: p.projectMilestones?.nodes?.[0] ?? null,
+  }
 }

@@ -242,15 +242,25 @@ export default function InitiativeCard({ initiative, dimmed, onEdit, onDelete, o
                   </svg>
                 </span>
               )}
-              {initiative.linear_project_id && (
-                <span
-                  className="text-[10px] font-semibold rounded px-1.5 py-0.5"
-                  style={{ backgroundColor: '#5E6AD226', color: '#5E6AD2' }}
-                  title={`Linked to Linear${initiative.linear_synced_at ? ` — last synced ${new Date(initiative.linear_synced_at).toLocaleString()}` : ''}`}
-                >
-                  L
-                </span>
-              )}
+              {initiative.linear_project_id && (() => {
+                const isDrift = initiative.sync_status === 'drift'
+                const isSync = initiative.sync_status === 'in_sync'
+                const bg = isDrift ? '#FAEEDA' : isSync ? '#E1F5EE' : '#5E6AD226'
+                const color = isDrift ? '#633806' : isSync ? '#085041' : '#5E6AD2'
+                const label = isDrift ? 'L !' : 'L'
+                const title = isDrift
+                  ? 'Linear drift detected — click to review'
+                  : `Linked to Linear${initiative.linear_synced_at ? ` — last synced ${new Date(initiative.linear_synced_at).toLocaleString()}` : ''}`
+                return (
+                  <span
+                    className="text-[10px] font-semibold rounded px-1.5 py-0.5"
+                    style={{ backgroundColor: bg, color }}
+                    title={title}
+                  >
+                    {label}
+                  </span>
+                )
+              })()}
               {initiative.target_month && MONTH_SHORT[initiative.target_month] && (
                 <span className="text-[10px] font-medium text-neutral-400 bg-neutral-100 rounded px-1.5 py-0.5">
                   {MONTH_SHORT[initiative.target_month]}

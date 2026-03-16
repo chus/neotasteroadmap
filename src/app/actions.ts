@@ -40,6 +40,20 @@ export async function getInitiatives(): Promise<Initiative[]> {
       linear_state: initiatives.linear_state,
       linear_synced_at: initiatives.linear_synced_at,
       linear_sync_enabled: initiatives.linear_sync_enabled,
+      linear_progress: initiatives.linear_progress,
+      linear_issue_count: initiatives.linear_issue_count,
+      linear_completed_issue_count: initiatives.linear_completed_issue_count,
+      linear_in_progress_issue_count: initiatives.linear_in_progress_issue_count,
+      linear_lead: initiatives.linear_lead,
+      linear_members: initiatives.linear_members,
+      linear_start_date: initiatives.linear_start_date,
+      linear_target_date: initiatives.linear_target_date,
+      linear_updates: initiatives.linear_updates,
+      linear_milestone: initiatives.linear_milestone,
+      sync_status: initiatives.sync_status,
+      sync_drift: initiatives.sync_drift,
+      sync_drift_detected_at: initiatives.sync_drift_detected_at,
+      sync_dismissed_at: initiatives.sync_dismissed_at,
       created_at: initiatives.created_at,
       level_name: strategicLevels.name,
       level_color: strategicLevels.color,
@@ -84,6 +98,20 @@ export async function getInitiatives(): Promise<Initiative[]> {
     linear_state: r.linear_state ?? null,
     linear_synced_at: r.linear_synced_at ?? null,
     linear_sync_enabled: r.linear_sync_enabled ?? false,
+    linear_progress: r.linear_progress ?? null,
+    linear_issue_count: r.linear_issue_count ?? null,
+    linear_completed_issue_count: r.linear_completed_issue_count ?? null,
+    linear_in_progress_issue_count: r.linear_in_progress_issue_count ?? null,
+    linear_lead: r.linear_lead ?? null,
+    linear_members: r.linear_members ?? null,
+    linear_start_date: r.linear_start_date ?? null,
+    linear_target_date: r.linear_target_date ?? null,
+    linear_updates: r.linear_updates ?? null,
+    linear_milestone: r.linear_milestone ?? null,
+    sync_status: r.sync_status ?? null,
+    sync_drift: r.sync_drift ?? null,
+    sync_drift_detected_at: r.sync_drift_detected_at ?? null,
+    sync_dismissed_at: r.sync_dismissed_at ?? null,
     created_at: r.created_at ?? new Date(),
   }))
 }
@@ -168,6 +196,15 @@ export async function createInitiative(data: {
     }
   }
 
+  return mapInitiativeRow(row, levelName, levelColor)
+}
+
+function mapInitiativeRow(
+  row: typeof initiatives.$inferSelect,
+  levelName = '',
+  levelColor = '#999',
+  parentTitle?: string
+): Initiative {
   return {
     id: row.id,
     title: row.title,
@@ -186,6 +223,7 @@ export async function createInitiative(data: {
     is_parent: row.is_parent ?? false,
     parent_initiative_id: row.parent_initiative_id ?? null,
     parent_color: row.parent_color ?? null,
+    parent_title: parentTitle,
     phase: (row.phase as Phase) ?? null,
     confidence_problem: row.confidence_problem ?? null,
     confidence_solution: row.confidence_solution ?? null,
@@ -194,6 +232,20 @@ export async function createInitiative(data: {
     linear_state: row.linear_state ?? null,
     linear_synced_at: row.linear_synced_at ?? null,
     linear_sync_enabled: row.linear_sync_enabled ?? false,
+    linear_progress: row.linear_progress ?? null,
+    linear_issue_count: row.linear_issue_count ?? null,
+    linear_completed_issue_count: row.linear_completed_issue_count ?? null,
+    linear_in_progress_issue_count: row.linear_in_progress_issue_count ?? null,
+    linear_lead: row.linear_lead ?? null,
+    linear_members: row.linear_members ?? null,
+    linear_start_date: row.linear_start_date ?? null,
+    linear_target_date: row.linear_target_date ?? null,
+    linear_updates: row.linear_updates ?? null,
+    linear_milestone: row.linear_milestone ?? null,
+    sync_status: row.sync_status ?? null,
+    sync_drift: row.sync_drift ?? null,
+    sync_drift_detected_at: row.sync_drift_detected_at ?? null,
+    sync_dismissed_at: row.sync_dismissed_at ?? null,
     created_at: row.created_at ?? new Date(),
   }
 }
@@ -228,6 +280,20 @@ export async function getPublicInitiatives(): Promise<Initiative[]> {
       linear_state: initiatives.linear_state,
       linear_synced_at: initiatives.linear_synced_at,
       linear_sync_enabled: initiatives.linear_sync_enabled,
+      linear_progress: initiatives.linear_progress,
+      linear_issue_count: initiatives.linear_issue_count,
+      linear_completed_issue_count: initiatives.linear_completed_issue_count,
+      linear_in_progress_issue_count: initiatives.linear_in_progress_issue_count,
+      linear_lead: initiatives.linear_lead,
+      linear_members: initiatives.linear_members,
+      linear_start_date: initiatives.linear_start_date,
+      linear_target_date: initiatives.linear_target_date,
+      linear_updates: initiatives.linear_updates,
+      linear_milestone: initiatives.linear_milestone,
+      sync_status: initiatives.sync_status,
+      sync_drift: initiatives.sync_drift,
+      sync_drift_detected_at: initiatives.sync_drift_detected_at,
+      sync_dismissed_at: initiatives.sync_dismissed_at,
       created_at: initiatives.created_at,
       level_name: strategicLevels.name,
       level_color: strategicLevels.color,
@@ -270,6 +336,20 @@ export async function getPublicInitiatives(): Promise<Initiative[]> {
     linear_state: r.linear_state ?? null,
     linear_synced_at: r.linear_synced_at ?? null,
     linear_sync_enabled: r.linear_sync_enabled ?? false,
+    linear_progress: r.linear_progress ?? null,
+    linear_issue_count: r.linear_issue_count ?? null,
+    linear_completed_issue_count: r.linear_completed_issue_count ?? null,
+    linear_in_progress_issue_count: r.linear_in_progress_issue_count ?? null,
+    linear_lead: r.linear_lead ?? null,
+    linear_members: r.linear_members ?? null,
+    linear_start_date: r.linear_start_date ?? null,
+    linear_target_date: r.linear_target_date ?? null,
+    linear_updates: r.linear_updates ?? null,
+    linear_milestone: r.linear_milestone ?? null,
+    sync_status: r.sync_status ?? null,
+    sync_drift: r.sync_drift ?? null,
+    sync_drift_detected_at: r.sync_drift_detected_at ?? null,
+    sync_dismissed_at: r.sync_dismissed_at ?? null,
     created_at: r.created_at ?? new Date(),
   }))
 }
@@ -765,12 +845,24 @@ export async function pullFromLinear(initiativeId: string): Promise<{ success: b
       }
     }
 
+    // Store enriched fields
     const now = new Date()
+    const progressInt = project.progress != null ? Math.round(project.progress * 100) : null
     await db
       .update(initiatives)
       .set({
         linear_state: project.state,
         linear_synced_at: now,
+        linear_progress: progressInt,
+        linear_lead: project.lead?.name ?? null,
+        linear_members: project.members.length > 0 ? JSON.stringify(project.members.map((m) => m.name)) : null,
+        linear_start_date: project.startDate ?? null,
+        linear_target_date: project.targetDate ?? null,
+        linear_updates: project.projectUpdates.length > 0 ? JSON.stringify(project.projectUpdates) : null,
+        linear_milestone: project.milestone ? JSON.stringify(project.milestone) : null,
+        sync_status: 'in_sync',
+        sync_drift: null,
+        sync_drift_detected_at: null,
       })
       .where(eq(initiatives.id, initiativeId))
 
@@ -812,6 +904,20 @@ export async function unlinkFromLinear(initiativeId: string): Promise<{ success:
       linear_state: null,
       linear_synced_at: null,
       linear_sync_enabled: false,
+      linear_progress: null,
+      linear_issue_count: null,
+      linear_completed_issue_count: null,
+      linear_in_progress_issue_count: null,
+      linear_lead: null,
+      linear_members: null,
+      linear_start_date: null,
+      linear_target_date: null,
+      linear_updates: null,
+      linear_milestone: null,
+      sync_status: null,
+      sync_drift: null,
+      sync_drift_detected_at: null,
+      sync_dismissed_at: null,
     })
     .where(eq(initiatives.id, initiativeId))
 
@@ -880,34 +986,7 @@ export async function importFromLinear(
     metadata: JSON.stringify({ note: 'imported from Linear', linear_project_id: project.id }),
   })
 
-  return {
-    id: row.id,
-    title: row.title,
-    subtitle: row.subtitle ?? '',
-    strategic_level_id: row.strategic_level_id,
-    strategic_level_name: levelName,
-    strategic_level_color: levelColor,
-    criterion: row.criterion as Criterion,
-    criterion_secondary: (row.criterion_secondary as Criterion) ?? null,
-    column: row.column as Column,
-    position: row.position,
-    dep_note: row.dep_note ?? '',
-    effort: row.effort ?? null,
-    target_month: row.target_month ?? null,
-    is_public: row.is_public ?? false,
-    is_parent: false,
-    parent_initiative_id: null,
-    parent_color: null,
-    phase: null,
-    confidence_problem: null,
-    confidence_solution: null,
-    linear_project_id: row.linear_project_id ?? null,
-    linear_url: row.linear_url ?? null,
-    linear_state: row.linear_state ?? null,
-    linear_synced_at: row.linear_synced_at ?? null,
-    linear_sync_enabled: row.linear_sync_enabled ?? false,
-    created_at: row.created_at ?? new Date(),
-  }
+  return mapInitiativeRow(row, levelName, levelColor)
 }
 
 export async function getLinearSyncLog(initiativeId: string, limit = 10): Promise<LinearSyncLogEntry[]> {
@@ -1625,4 +1704,145 @@ export async function releaseInitiative(id: string, releaseNote: string) {
     released_at: new Date(),
     release_note: releaseNote,
   }).where(eq(initiatives.id, id))
+}
+
+// ─── Drift Detection ───
+
+export async function runDriftDetection(initiativeId?: string): Promise<{ checked: number; drifted: number; errors: number }> {
+  const { isLinearConfigured, getLinearProject } = await import('@/lib/linear')
+  const { detectDrift } = await import('@/lib/linear-drift')
+
+  if (!isLinearConfigured()) {
+    return { checked: 0, drifted: 0, errors: 0 }
+  }
+
+  // Get linked initiatives
+  let rows
+  if (initiativeId) {
+    rows = await db.select().from(initiatives).where(eq(initiatives.id, initiativeId))
+  } else {
+    rows = await db.select().from(initiatives).where(sql`${initiatives.linear_project_id} IS NOT NULL AND ${initiatives.linear_sync_enabled} = true`)
+  }
+
+  let checked = 0
+  let drifted = 0
+  let errors = 0
+
+  for (const row of rows) {
+    if (!row.linear_project_id) continue
+    try {
+      const project = await getLinearProject(row.linear_project_id)
+      const result = detectDrift(
+        { column: row.column, target_month: row.target_month, title: row.title, linear_progress: row.linear_progress },
+        project
+      )
+
+      // Store enriched data regardless of drift
+      const progressInt = project.progress != null ? Math.round(project.progress * 100) : null
+      const enrichedFields: Record<string, unknown> = {
+        linear_state: project.state,
+        linear_synced_at: new Date(),
+        linear_progress: progressInt,
+        linear_lead: project.lead?.name ?? null,
+        linear_members: project.members.length > 0 ? JSON.stringify(project.members.map((m) => m.name)) : null,
+        linear_start_date: project.startDate ?? null,
+        linear_target_date: project.targetDate ?? null,
+        linear_updates: project.projectUpdates.length > 0 ? JSON.stringify(project.projectUpdates) : null,
+        linear_milestone: project.milestone ? JSON.stringify(project.milestone) : null,
+      }
+
+      if (result.hasDrift) {
+        enrichedFields.sync_status = 'drift'
+        enrichedFields.sync_drift = JSON.stringify(result.fields)
+        enrichedFields.sync_drift_detected_at = new Date()
+        drifted++
+      } else {
+        enrichedFields.sync_status = 'in_sync'
+        enrichedFields.sync_drift = null
+        enrichedFields.sync_drift_detected_at = null
+      }
+
+      await db.update(initiatives).set(enrichedFields).where(eq(initiatives.id, row.id))
+      checked++
+
+      // 300ms delay between API calls
+      if (rows.length > 1) {
+        await new Promise((r) => setTimeout(r, 300))
+      }
+    } catch {
+      errors++
+    }
+  }
+
+  return { checked, drifted, errors }
+}
+
+export async function applyLinearDrift(initiativeId: string, fieldsToApply: string[]): Promise<{ success: boolean }> {
+  const [row] = await db.select().from(initiatives).where(eq(initiatives.id, initiativeId))
+  if (!row || !row.sync_drift) return { success: false }
+
+  const driftFields = JSON.parse(row.sync_drift) as { field: string; linearValue: string }[]
+  const updates: Record<string, unknown> = {}
+
+  for (const df of driftFields) {
+    if (!fieldsToApply.includes(df.field)) continue
+
+    if (df.field === 'column') {
+      // linearValue is like "started → now", extract the column
+      const parts = df.linearValue.split(' → ')
+      const col = parts[parts.length - 1]
+      if (col) updates.column = col
+    } else if (df.field === 'target_month') {
+      updates.target_month = df.linearValue === 'none' ? null : df.linearValue
+    } else if (df.field === 'title') {
+      updates.title = df.linearValue
+    }
+  }
+
+  if (Object.keys(updates).length > 0) {
+    await db.update(initiatives).set(updates).where(eq(initiatives.id, initiativeId))
+  }
+
+  // Clear drift
+  await db.update(initiatives).set({
+    sync_status: 'in_sync',
+    sync_drift: null,
+    sync_drift_detected_at: null,
+  }).where(eq(initiatives.id, initiativeId))
+
+  await db.insert(linearSyncLog).values({
+    initiative_id: initiativeId,
+    initiative_title: row.title,
+    direction: 'pull',
+    status: 'success',
+    linear_project_id: row.linear_project_id,
+    changes: `Applied drift: ${fieldsToApply.join(', ')}`,
+  })
+
+  return { success: true }
+}
+
+export async function dismissDrift(initiativeId: string): Promise<{ success: boolean }> {
+  await db.update(initiatives).set({
+    sync_status: 'in_sync',
+    sync_drift: null,
+    sync_drift_detected_at: null,
+    sync_dismissed_at: new Date(),
+  }).where(eq(initiatives.id, initiativeId))
+
+  return { success: true }
+}
+
+export async function pushAndResolveDrift(initiativeId: string): Promise<{ success: boolean; error?: string }> {
+  const result = await pushToLinear(initiativeId)
+  if (!result.success) return result
+
+  // Clear drift after successful push
+  await db.update(initiatives).set({
+    sync_status: 'in_sync',
+    sync_drift: null,
+    sync_drift_detected_at: null,
+  }).where(eq(initiatives.id, initiativeId))
+
+  return { success: true }
 }

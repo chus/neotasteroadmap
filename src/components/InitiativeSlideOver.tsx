@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { CRITERION_CONFIG, COLUMNS, EFFORT_CONFIG, MONTHS_2026, MONTH_SHORT, PHASE_CONFIG } from '@/lib/constants'
-import { getLinkedRequest, pushToLinear, pullFromLinear, unlinkFromLinear, getLinearSyncLog, getChildInitiatives, getReactionsForInitiative } from '@/app/actions'
+import { getLinkedRequest, pushToLinear, pullFromLinear, unlinkFromLinear, getLinearSyncLog, getChildInitiatives, getReactionsForInitiative, runDriftDetection, applyLinearDrift, dismissDrift, pushAndResolveDrift } from '@/app/actions'
 import ReactionBar from './ReactionBar'
 import DecisionLog from './DecisionLog'
 import type { Initiative, StrategicLevel, FeatureRequest, Criterion, Column, Phase, LinearSyncLogEntry, ReactionCount } from '@/types'
@@ -57,6 +57,405 @@ function makeForm(initiative: Initiative) {
     confidence_problem: initiative.confidence_problem,
     confidence_solution: initiative.confidence_solution,
   }
+}
+
+// ─── Linear Section ───
+
+function LinearSection({
+  initiative,
+  linearLinked, setLinearLinked,
+  linearUrl, setLinearUrl,
+  linearState, setLinearState,
+  linearSyncedAt, setLinearSyncedAt,
+  linearPushing, setLinearPushing,
+  linearPulling, setLinearPulling,
+  linearError, setLinearError,
+  linearPullChanges, setLinearPullChanges,
+  syncLog, setSyncLog,
+  syncLogExpanded, setSyncLogExpanded,
+}: {
+  initiative: Initiative
+  linearLinked: boolean; setLinearLinked: (v: boolean) => void
+  linearUrl: string | null; setLinearUrl: (v: string | null) => void
+  linearState: string | null; setLinearState: (v: string | null) => void
+  linearSyncedAt: Date | null; setLinearSyncedAt: (v: Date | null) => void
+  linearPushing: boolean; setLinearPushing: (v: boolean) => void
+  linearPulling: boolean; setLinearPulling: (v: boolean) => void
+  linearError: string | null; setLinearError: (v: string | null) => void
+  linearPullChanges: string | null; setLinearPullChanges: (v: string | null) => void
+  syncLog: LinearSyncLogEntry[]; setSyncLog: (v: LinearSyncLogEntry[]) => void
+  syncLogExpanded: boolean; setSyncLogExpanded: (v: boolean) => void
+}) {
+  const [driftChecking, setDriftChecking] = useState(false)
+  const [driftCheckResult, setDriftCheckResult] = useState<string | null>(null)
+  const [selectedDriftFields, setSelectedDriftFields] = useState<Set<string>>(new Set())
+  const [driftApplying, setDriftApplying] = useState(false)
+
+  const hasDrift = initiative.sync_status === 'drift'
+  const driftFields = hasDrift && initiative.sync_drift ? JSON.parse(initiative.sync_drift) as { field: string; label: string; roadmapValue: string; linearValue: string; severity: string }[] : []
+
+  // Parse enriched data
+  const members: string[] = initiative.linear_members ? JSON.parse(initiative.linear_members) : []
+  const updates: { id: string; body: string; createdAt: string; authorName: string; health: string | null }[] =
+    initiative.linear_updates ? JSON.parse(initiative.linear_updates) : []
+  const milestone: { name: string; targetDate: string } | null =
+    initiative.linear_milestone ? JSON.parse(initiative.linear_milestone) : null
+
+  return (
+    <section>
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold text-white" style={{ backgroundColor: '#5E6AD2' }}>L</div>
+        <span className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide">Linear</span>
+        {linearLinked && (
+          <span
+            className="text-[10px] font-medium px-1.5 py-0.5 rounded-full"
+            style={hasDrift
+              ? { backgroundColor: '#FAEEDA', color: '#633806' }
+              : { backgroundColor: '#E1F5EE', color: '#085041' }}
+          >
+            {hasDrift ? 'Drift detected' : 'Synced'}
+          </span>
+        )}
+        {linearLinked && linearSyncedAt && (
+          <span className="text-[10px] text-neutral-400 ml-auto" title={new Date(linearSyncedAt).toLocaleString()}>
+            {timeAgo(new Date(linearSyncedAt))}
+          </span>
+        )}
+      </div>
+
+      {!linearLinked ? (
+        <div>
+          <p className="text-[12px] text-neutral-400 mb-3">Not linked to a Linear project.</p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                setLinearPushing(true)
+                setLinearError(null)
+                const result = await pushToLinear(initiative.id)
+                setLinearPushing(false)
+                if (result.success) {
+                  setLinearLinked(true)
+                  setLinearUrl(result.linearUrl ?? null)
+                  setLinearSyncedAt(new Date())
+                  getLinearSyncLog(initiative.id).then(setSyncLog)
+                } else {
+                  setLinearError(result.error ?? 'Failed to push')
+                }
+              }}
+              disabled={linearPushing}
+              className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
+            >
+              {linearPushing ? 'Pushing...' : 'Push to Linear'}
+            </button>
+          </div>
+          {linearError && (
+            <p className="text-[11px] text-red-500 mt-2">{linearError}</p>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {/* Project link + action buttons */}
+          <div className="flex items-center justify-between">
+            {linearUrl ? (
+              <a href={linearUrl} target="_blank" rel="noopener noreferrer" className="text-[12px] text-[#5E6AD2] hover:underline flex items-center gap-1">
+                {initiative.title}
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </a>
+            ) : (
+              <span className="text-[12px] text-neutral-600">Linked</span>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={async () => {
+                setLinearPulling(true)
+                setLinearError(null)
+                setLinearPullChanges(null)
+                const result = await pullFromLinear(initiative.id)
+                setLinearPulling(false)
+                if (result.success) {
+                  setLinearSyncedAt(new Date())
+                  setLinearPullChanges(result.changes ?? null)
+                  getLinearSyncLog(initiative.id).then(setSyncLog)
+                } else {
+                  setLinearError(result.error ?? 'Pull failed')
+                }
+              }}
+              disabled={linearPulling}
+              className="text-[11px] font-medium px-2.5 py-1 rounded-lg border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
+            >
+              {linearPulling ? 'Pulling...' : 'Pull latest'}
+            </button>
+            <button
+              onClick={async () => {
+                setLinearPushing(true)
+                setLinearError(null)
+                const result = await pushToLinear(initiative.id)
+                setLinearPushing(false)
+                if (result.success) {
+                  setLinearSyncedAt(new Date())
+                  getLinearSyncLog(initiative.id).then(setSyncLog)
+                } else {
+                  setLinearError(result.error ?? 'Push failed')
+                }
+              }}
+              disabled={linearPushing}
+              className="text-[11px] font-medium px-2.5 py-1 rounded-lg border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
+            >
+              {linearPushing ? 'Pushing...' : 'Push changes'}
+            </button>
+            <button
+              onClick={async () => {
+                if (!confirm('Unlink this initiative from Linear? The Linear project will not be deleted.')) return
+                await unlinkFromLinear(initiative.id)
+                setLinearLinked(false)
+                setLinearUrl(null)
+                setLinearState(null)
+                setLinearSyncedAt(null)
+                setSyncLog([])
+              }}
+              className="text-[11px] text-red-500 hover:text-red-700 ml-auto"
+            >
+              Unlink
+            </button>
+          </div>
+
+          {linearPullChanges && (
+            <p className="text-[11px] text-neutral-400 italic">{linearPullChanges}</p>
+          )}
+          {linearError && (
+            <p className="text-[11px] text-red-500">{linearError}</p>
+          )}
+
+          {/* Drift panel */}
+          {hasDrift && driftFields.length > 0 && (
+            <div className="border border-amber-300 rounded-lg p-3 bg-amber-50/50">
+              <div className="text-[11px] font-medium text-amber-800 mb-2">
+                Linear state differs from roadmap
+              </div>
+              <div className="space-y-1.5 mb-3">
+                {driftFields.map((df) => (
+                  <label key={df.field} className="flex items-start gap-2 text-[11px] cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedDriftFields.has(df.field)}
+                      onChange={(e) => {
+                        const next = new Set(selectedDriftFields)
+                        if (e.target.checked) next.add(df.field)
+                        else next.delete(df.field)
+                        setSelectedDriftFields(next)
+                      }}
+                      className="mt-0.5 accent-[#50E88A]"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: df.severity === 'high' ? '#E24B4A' : df.severity === 'medium' ? '#EF9F27' : '#999' }}
+                        />
+                        <span className="font-medium text-neutral-700">{df.label}</span>
+                      </div>
+                      <div className="text-neutral-500 mt-0.5">
+                        <span className="line-through">{df.roadmapValue}</span>
+                        {' → '}
+                        <span className="text-neutral-700">{df.linearValue}</span>
+                      </div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  onClick={async () => {
+                    if (selectedDriftFields.size === 0) return
+                    setDriftApplying(true)
+                    await applyLinearDrift(initiative.id, [...selectedDriftFields])
+                    setDriftApplying(false)
+                    setSelectedDriftFields(new Set())
+                    getLinearSyncLog(initiative.id).then(setSyncLog)
+                  }}
+                  disabled={selectedDriftFields.size === 0 || driftApplying}
+                  className="text-[10px] font-medium px-2 py-1 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-40"
+                >
+                  {driftApplying ? 'Applying...' : `Apply selected (${selectedDriftFields.size})`}
+                </button>
+                <button
+                  onClick={async () => {
+                    setDriftApplying(true)
+                    await pushAndResolveDrift(initiative.id)
+                    setDriftApplying(false)
+                    getLinearSyncLog(initiative.id).then(setSyncLog)
+                  }}
+                  disabled={driftApplying}
+                  className="text-[10px] font-medium px-2 py-1 rounded-lg border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
+                >
+                  Push roadmap → Linear
+                </button>
+                <button
+                  onClick={async () => {
+                    await dismissDrift(initiative.id)
+                  }}
+                  className="text-[10px] text-neutral-400 hover:text-neutral-600 ml-auto"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Progress bar */}
+          {initiative.linear_progress != null && (
+            <div>
+              <div className="flex items-center justify-between text-[11px] mb-1">
+                <span className="text-neutral-400">Progress</span>
+                <span className="text-neutral-600 font-medium">{initiative.linear_progress}%</span>
+              </div>
+              <div className="w-full h-1.5 bg-neutral-100 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${initiative.linear_progress}%`,
+                    backgroundColor: initiative.linear_progress >= 70 ? '#1D9E75' : initiative.linear_progress >= 30 ? '#EF9F27' : '#E24B4A',
+                  }}
+                />
+              </div>
+              {(initiative.linear_issue_count != null || initiative.linear_in_progress_issue_count != null) && (
+                <p className="text-[10px] text-neutral-400 mt-1">
+                  {[
+                    initiative.linear_issue_count != null ? `${initiative.linear_issue_count} issues` : null,
+                    initiative.linear_completed_issue_count != null ? `${initiative.linear_completed_issue_count} done` : null,
+                    initiative.linear_in_progress_issue_count != null ? `${initiative.linear_in_progress_issue_count} in progress` : null,
+                  ].filter(Boolean).join(' · ')}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Team */}
+          {(initiative.linear_lead || members.length > 0) && (
+            <div>
+              <div className="text-[10px] text-neutral-400 mb-1.5">Team</div>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {initiative.linear_lead && (
+                  <span className="inline-flex items-center gap-1 text-[11px]">
+                    <span className="w-5 h-5 rounded-full bg-[#5E6AD2] text-white text-[9px] font-medium flex items-center justify-center">
+                      {initiative.linear_lead.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                    </span>
+                    <span className="text-neutral-600">{initiative.linear_lead}</span>
+                    <span className="text-[9px] text-neutral-400">(lead)</span>
+                  </span>
+                )}
+                {members.filter((m) => m !== initiative.linear_lead).map((m) => (
+                  <span key={m} className="inline-flex items-center gap-1 text-[11px]">
+                    <span className="w-5 h-5 rounded-full bg-neutral-300 text-white text-[9px] font-medium flex items-center justify-center">
+                      {m.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                    </span>
+                    <span className="text-neutral-500">{m}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Timeline */}
+          {(initiative.linear_start_date || initiative.linear_target_date) && (
+            <div className="flex items-center gap-2 text-[11px]">
+              <span className="text-neutral-400">Timeline</span>
+              <span className="text-neutral-600">
+                {initiative.linear_start_date ? new Date(initiative.linear_start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}
+                {' → '}
+                {initiative.linear_target_date ? new Date(initiative.linear_target_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '—'}
+              </span>
+              {milestone && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-600 font-medium">
+                  {milestone.name}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Project updates */}
+          {updates.length > 0 && (
+            <div>
+              <div className="text-[10px] text-neutral-400 mb-1.5">Recent updates</div>
+              <div className="space-y-2">
+                {updates.slice(0, 3).map((u) => (
+                  <div key={u.id} className="text-[11px] border-l-2 border-neutral-200 pl-2.5">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-neutral-600 font-medium">{u.authorName}</span>
+                      {u.health && (
+                        <span
+                          className="w-1.5 h-1.5 rounded-full"
+                          style={{ backgroundColor: u.health === 'onTrack' ? '#1D9E75' : u.health === 'atRisk' ? '#EF9F27' : '#E24B4A' }}
+                          title={u.health}
+                        />
+                      )}
+                      <span className="text-neutral-400">{timeAgo(new Date(u.createdAt))}</span>
+                    </div>
+                    <p className="text-neutral-500 line-clamp-2">{u.body}</p>
+                  </div>
+                ))}
+              </div>
+              {linearUrl && (
+                <a href={linearUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-[#5E6AD2] hover:underline mt-1.5 inline-block">
+                  View all in Linear →
+                </a>
+              )}
+            </div>
+          )}
+
+          {/* Manual drift check */}
+          <div className="pt-2">
+            <button
+              onClick={async () => {
+                setDriftChecking(true)
+                setDriftCheckResult(null)
+                const result = await runDriftDetection(initiative.id)
+                setDriftChecking(false)
+                setDriftCheckResult(result.drifted > 0 ? 'Drift detected — refresh to see details' : 'No drift found')
+              }}
+              disabled={driftChecking}
+              className="text-[10px] text-neutral-400 hover:text-neutral-600 disabled:opacity-40"
+            >
+              {driftChecking ? 'Checking...' : 'Check for drift now'}
+            </button>
+            {driftCheckResult && (
+              <span className="text-[10px] text-neutral-400 ml-2">{driftCheckResult}</span>
+            )}
+          </div>
+
+          {/* Sync log */}
+          {syncLog.length > 0 && (
+            <div className="pt-2">
+              <div className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-1.5">Sync history</div>
+              <div className="space-y-1">
+                {(syncLogExpanded ? syncLog : syncLog.slice(0, 3)).map((entry) => (
+                  <div key={entry.id} className="flex items-center gap-2 text-[11px]">
+                    <span>{entry.direction === 'push' ? '↑' : '↓'}</span>
+                    <span className={`w-1.5 h-1.5 rounded-full ${entry.status === 'success' ? 'bg-green-500' : 'bg-red-500'}`} />
+                    <span className="text-neutral-500 truncate flex-1">
+                      {entry.changes || entry.error_message || entry.direction}
+                    </span>
+                    <span className="text-neutral-400 shrink-0">{timeAgo(new Date(entry.created_at))}</span>
+                  </div>
+                ))}
+              </div>
+              {syncLog.length > 3 && !syncLogExpanded && (
+                <button onClick={() => setSyncLogExpanded(true)} className="text-[10px] text-neutral-400 hover:text-neutral-600 mt-1">
+                  View all ({syncLog.length})
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  )
 }
 
 export default function InitiativeSlideOver({ initiative, strategicLevels, onSave, onDelete, onClose }: Props) {
@@ -691,160 +1090,29 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
               <hr className="my-5" style={{ borderColor: '#f0f0f0' }} />
 
               {/* Linear */}
-              <section>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide">Linear</div>
-                  {linearLinked && <span className="w-1.5 h-1.5 rounded-full bg-green-500" />}
-                </div>
-
-                {!linearLinked ? (
-                  <div>
-                    <p className="text-[12px] text-neutral-400 mb-3">Not linked to a Linear project.</p>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={async () => {
-                          setLinearPushing(true)
-                          setLinearError(null)
-                          const result = await pushToLinear(initiative.id)
-                          setLinearPushing(false)
-                          if (result.success) {
-                            setLinearLinked(true)
-                            setLinearUrl(result.linearUrl ?? null)
-                            setLinearSyncedAt(new Date())
-                            getLinearSyncLog(initiative.id).then(setSyncLog)
-                          } else {
-                            setLinearError(result.error ?? 'Failed to push')
-                          }
-                        }}
-                        disabled={linearPushing}
-                        className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
-                      >
-                        {linearPushing ? 'Pushing...' : 'Push to Linear'}
-                      </button>
-                    </div>
-                    {linearError && (
-                      <p className="text-[11px] text-red-500 mt-2">{linearError}</p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-[12px]">
-                      <span className="text-neutral-400">Project</span>
-                      {linearUrl ? (
-                        <a href={linearUrl} target="_blank" rel="noopener noreferrer" className="text-[#5E6AD2] hover:underline flex items-center gap-1">
-                          {initiative.title}
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-                          </svg>
-                        </a>
-                      ) : (
-                        <span className="text-neutral-600">Linked</span>
-                      )}
-                    </div>
-
-                    {linearState && (
-                      <div className="flex items-center justify-between text-[12px]">
-                        <span className="text-neutral-400">Linear state</span>
-                        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600">
-                          {linearState}
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between text-[12px]">
-                      <span className="text-neutral-400">Last synced</span>
-                      <span className="text-neutral-600" title={linearSyncedAt ? new Date(linearSyncedAt).toLocaleString() : ''}>
-                        {linearSyncedAt ? timeAgo(new Date(linearSyncedAt)) : '—'}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 pt-1">
-                      <button
-                        onClick={async () => {
-                          setLinearPushing(true)
-                          setLinearError(null)
-                          const result = await pushToLinear(initiative.id)
-                          setLinearPushing(false)
-                          if (result.success) {
-                            setLinearSyncedAt(new Date())
-                            getLinearSyncLog(initiative.id).then(setSyncLog)
-                          } else {
-                            setLinearError(result.error ?? 'Push failed')
-                          }
-                        }}
-                        disabled={linearPushing}
-                        className="text-[11px] font-medium px-2.5 py-1 rounded-lg border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
-                      >
-                        {linearPushing ? 'Pushing...' : 'Push changes'}
-                      </button>
-                      <button
-                        onClick={async () => {
-                          setLinearPulling(true)
-                          setLinearError(null)
-                          setLinearPullChanges(null)
-                          const result = await pullFromLinear(initiative.id)
-                          setLinearPulling(false)
-                          if (result.success) {
-                            setLinearSyncedAt(new Date())
-                            setLinearPullChanges(result.changes ?? null)
-                            getLinearSyncLog(initiative.id).then(setSyncLog)
-                          } else {
-                            setLinearError(result.error ?? 'Pull failed')
-                          }
-                        }}
-                        disabled={linearPulling}
-                        className="text-[11px] font-medium px-2.5 py-1 rounded-lg border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
-                      >
-                        {linearPulling ? 'Pulling...' : 'Pull from Linear'}
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (!confirm('Unlink this initiative from Linear? The Linear project will not be deleted.')) return
-                          await unlinkFromLinear(initiative.id)
-                          setLinearLinked(false)
-                          setLinearUrl(null)
-                          setLinearState(null)
-                          setLinearSyncedAt(null)
-                          setSyncLog([])
-                        }}
-                        className="text-[11px] text-red-500 hover:text-red-700 ml-auto"
-                      >
-                        Unlink
-                      </button>
-                    </div>
-
-                    {linearPullChanges && (
-                      <p className="text-[11px] text-neutral-400 italic">{linearPullChanges}</p>
-                    )}
-                    {linearError && (
-                      <p className="text-[11px] text-red-500">{linearError}</p>
-                    )}
-
-                    {syncLog.length > 0 && (
-                      <div className="pt-2">
-                        <div className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-1.5">Sync history</div>
-                        <div className="space-y-1">
-                          {(syncLogExpanded ? syncLog : syncLog.slice(0, 3)).map((entry) => (
-                            <div key={entry.id} className="flex items-center gap-2 text-[11px]">
-                              <span>{entry.direction === 'push' ? '↑' : '↓'}</span>
-                              <span className={`w-1.5 h-1.5 rounded-full ${entry.status === 'success' ? 'bg-green-500' : 'bg-red-500'}`} />
-                              <span className="text-neutral-500 truncate flex-1">
-                                {entry.changes || entry.error_message || entry.direction}
-                              </span>
-                              <span className="text-neutral-400 shrink-0">{timeAgo(new Date(entry.created_at))}</span>
-                            </div>
-                          ))}
-                        </div>
-                        {syncLog.length > 3 && !syncLogExpanded && (
-                          <button onClick={() => setSyncLogExpanded(true)} className="text-[10px] text-neutral-400 hover:text-neutral-600 mt-1">
-                            View all ({syncLog.length})
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </section>
+              <LinearSection
+                initiative={initiative}
+                linearLinked={linearLinked}
+                setLinearLinked={setLinearLinked}
+                linearUrl={linearUrl}
+                setLinearUrl={setLinearUrl}
+                linearState={linearState}
+                setLinearState={setLinearState}
+                linearSyncedAt={linearSyncedAt}
+                setLinearSyncedAt={setLinearSyncedAt}
+                linearPushing={linearPushing}
+                setLinearPushing={setLinearPushing}
+                linearPulling={linearPulling}
+                setLinearPulling={setLinearPulling}
+                linearError={linearError}
+                setLinearError={setLinearError}
+                linearPullChanges={linearPullChanges}
+                setLinearPullChanges={setLinearPullChanges}
+                syncLog={syncLog}
+                setSyncLog={setSyncLog}
+                syncLogExpanded={syncLogExpanded}
+                setSyncLogExpanded={setSyncLogExpanded}
+              />
             </div>
           )}
         </div>

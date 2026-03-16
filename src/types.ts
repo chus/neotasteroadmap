@@ -39,6 +39,20 @@ export interface Initiative {
   linear_state: string | null
   linear_synced_at: Date | null
   linear_sync_enabled: boolean
+  linear_progress: number | null
+  linear_issue_count: number | null
+  linear_completed_issue_count: number | null
+  linear_in_progress_issue_count: number | null
+  linear_lead: string | null
+  linear_members: string | null
+  linear_start_date: string | null
+  linear_target_date: string | null
+  linear_updates: string | null
+  linear_milestone: string | null
+  sync_status: string | null
+  sync_drift: string | null
+  sync_drift_detected_at: Date | null
+  sync_dismissed_at: Date | null
   created_at: Date
 }
 

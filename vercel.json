@@ -5,6 +5,10 @@
     {
       "path": "/api/digest/send?token=${DIGEST_CRON_SECRET}",
       "schedule": "0 8 * * 1"
+    },
+    {
+      "path": "/api/linear/drift?token=${DIGEST_CRON_SECRET}",
+      "schedule": "0 0 * * *"
     }
   ]
 }

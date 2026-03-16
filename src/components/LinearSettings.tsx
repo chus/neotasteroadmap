@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { testLinearConnection, pushToLinear, getAllLinearSyncLogs } from '@/app/actions'
+import { testLinearConnection, pushToLinear, getAllLinearSyncLogs, runDriftDetection } from '@/app/actions'
 import LinearImportModal from './LinearImportModal'
 import type { Initiative, StrategicLevel, LinearSyncLogEntry } from '@/types'
 
@@ -34,6 +34,8 @@ export default function LinearSettings({ isConfigured, initiatives, strategicLev
   const [syncLogs, setSyncLogs] = useState<LinearSyncLogEntry[]>(initialSyncLogs)
   const [logsOffset, setLogsOffset] = useState(20)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [driftChecking, setDriftChecking] = useState(false)
+  const [driftResult, setDriftResult] = useState<string | null>(null)
 
   async function handleTestConnection() {
     setTesting(true)
@@ -142,9 +144,27 @@ export default function LinearSettings({ isConfigured, initiatives, strategicLev
                 >
                   Import from Linear
                 </button>
+                <button
+                  onClick={async () => {
+                    setDriftChecking(true)
+                    setDriftResult(null)
+                    const result = await runDriftDetection()
+                    setDriftChecking(false)
+                    setDriftResult(`Checked ${result.checked} · ${result.drifted} drift${result.drifted !== 1 ? 's' : ''} found${result.errors > 0 ? ` · ${result.errors} errors` : ''}`)
+                    const freshLogs = await getAllLinearSyncLogs(20, 0)
+                    setSyncLogs(freshLogs)
+                  }}
+                  disabled={driftChecking}
+                  className="text-[11px] font-medium px-3 py-1.5 rounded-lg border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
+                >
+                  {driftChecking ? 'Checking...' : 'Run drift check'}
+                </button>
               </div>
               {bulkProgress && (
                 <p className="text-[11px] text-neutral-500 mt-2">{bulkProgress}</p>
+              )}
+              {driftResult && (
+                <p className="text-[11px] text-neutral-500 mt-2">{driftResult}</p>
               )}
             </div>
 
