@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { COLUMNS, CRITERION_CONFIG, EFFORT_CONFIG, MONTHS_2026, MONTH_SHORT, EFFORT_WEEKS } from '@/lib/constants'
+import { COLUMNS, CRITERION_CONFIG, EFFORT_CONFIG, MONTHS_2026, MONTH_SHORT, EFFORT_WEEKS, isMonthInColumnRange } from '@/lib/constants'
 import type { Initiative, StrategicLevel, FeatureRequest, Criterion } from '@/types'
 
 const COLUMN_COLORS: Record<string, string> = {
@@ -97,6 +97,14 @@ function generateInsights(items: Initiative[], levels: StrategicLevel[], request
   }
   if (openRequests > 0) {
     insights.push(`${openRequests} open feature request${openRequests === 1 ? '' : 's'} awaiting review.`)
+  }
+
+  // Month/column mismatch
+  const mismatchCount = items.filter(
+    (i) => i.target_month && i.column !== 'parked' && i.column !== 'released' && !isMonthInColumnRange(i.target_month, i.column)
+  ).length
+  if (mismatchCount > 0) {
+    insights.push(`${mismatchCount} initiative${mismatchCount === 1 ? ' has a' : 's have'} target month outside ${mismatchCount === 1 ? 'its' : 'their'} column's typical range — review the mismatches below.`)
   }
 
   // Effort insights
@@ -553,6 +561,36 @@ export default function StatsPage({ initiatives, levels, requests }: Props) {
           ))}
         </div>
       </section>
+
+      {/* Target month mismatches */}
+      {(() => {
+        const mismatched = initiatives.filter(
+          (i) => i.target_month && i.column !== 'parked' && i.column !== 'released' && !isMonthInColumnRange(i.target_month, i.column)
+        )
+        if (mismatched.length === 0) return null
+        return (
+          <section className="mb-8">
+            <h2 className="text-[14px] font-semibold text-neutral-800 mb-1">Target month mismatches</h2>
+            <p className="text-[12px] text-neutral-400 mb-4">
+              Initiatives where the target month falls outside the column&apos;s typical range. Consider moving the card or updating the target month.
+            </p>
+            <div className="space-y-1.5">
+              {mismatched.map((i) => {
+                const col = COLUMNS.find((c) => c.id === i.column)
+                return (
+                  <div key={i.id} className="flex items-center gap-3 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50/50">
+                    <span className="text-[10px] font-medium text-amber-600">⚠</span>
+                    <span className="text-[12px] text-neutral-700 flex-1 truncate">{i.title}</span>
+                    <span className="text-[10px] text-neutral-400 shrink-0">
+                      {MONTH_SHORT[i.target_month!]} in {col?.label ?? i.column}{col?.months ? ` (${col.months})` : ''}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )
+      })()}
 
       {/* Insights */}
       <section className="mb-8">

@@ -7,9 +7,10 @@ interface Props {
   account?: KeyAccount
   onSave: (data: { name: string; company: string; logo_url: string }) => void
   onClose: () => void
+  onDelete?: () => void
 }
 
-export default function KeyAccountModal({ account, onSave, onClose }: Props) {
+export default function KeyAccountModal({ account, onSave, onClose, onDelete }: Props) {
   const [form, setForm] = useState({
     name: account?.name ?? '',
     company: account?.company ?? '',
@@ -79,20 +80,30 @@ export default function KeyAccountModal({ account, onSave, onClose }: Props) {
           />
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-2">
-          <button
-            onClick={onClose}
-            className="text-[12px] font-medium px-4 py-1.5 rounded-lg border border-neutral-300 hover:bg-neutral-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!form.name.trim()}
-            className="text-[12px] font-medium px-4 py-1.5 rounded-lg bg-neutral-900 text-white hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            {isNew ? 'Add' : 'Save'}
-          </button>
+        <div className="flex items-center gap-2 pt-2">
+          {!isNew && onDelete && (
+            <button
+              onClick={onDelete}
+              className="text-[12px] text-red-500 hover:text-red-700 hover:underline"
+            >
+              Delete
+            </button>
+          )}
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              onClick={onClose}
+              className="text-[12px] font-medium px-4 py-1.5 rounded-lg border border-neutral-300 hover:bg-neutral-50"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={!form.name.trim()}
+              className="text-[12px] font-medium px-4 py-1.5 rounded-lg bg-neutral-900 text-white hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {isNew ? 'Add' : 'Save'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

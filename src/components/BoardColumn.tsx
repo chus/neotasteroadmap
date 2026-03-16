@@ -9,6 +9,7 @@ interface Props {
   columnId: Column
   label: string
   sublabel: string
+  months?: string
   initiatives: Initiative[]
   activeFilterLevelId: string | null
   searchQuery: string
@@ -24,6 +25,7 @@ export default function BoardColumn({
   columnId,
   label,
   sublabel,
+  months,
   initiatives,
   activeFilterLevelId,
   searchQuery,
@@ -53,6 +55,9 @@ export default function BoardColumn({
           <span className="text-[11px] text-neutral-400">{sublabel}</span>
           <span className="text-[11px] font-medium text-neutral-400 ml-auto">{initiatives.length}</span>
         </div>
+        {months && (
+          <div className="text-[10px] text-neutral-400 mt-0.5">{months}</div>
+        )}
       </div>
       <div
         ref={setNodeRef}

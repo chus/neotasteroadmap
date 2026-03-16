@@ -1,12 +1,25 @@
 import type { Column, Criterion, Phase } from '@/types'
 
-export const COLUMNS: { id: Column; label: string; sublabel: string }[] = [
-  { id: 'now', label: 'Now', sublabel: 'Q1–Q2' },
-  { id: 'next', label: 'Next', sublabel: 'Q2–Q3' },
-  { id: 'later', label: 'Later', sublabel: 'Q3–Q4' },
+export const COLUMNS: { id: Column; label: string; sublabel: string; months?: string }[] = [
+  { id: 'now', label: 'Now', sublabel: 'Q1–Q2', months: 'Jan → Jun' },
+  { id: 'next', label: 'Next', sublabel: 'Q2–Q3', months: 'Apr → Sep' },
+  { id: 'later', label: 'Later', sublabel: 'Q3–Q4', months: 'Jul → Dec' },
   { id: 'parked', label: 'Parked', sublabel: 'Out of scope 2026' },
   { id: 'released', label: 'Released', sublabel: '2026' },
 ]
+
+export const COLUMN_MONTH_RANGES: Record<string, number[]> = {
+  now: [1, 2, 3, 4, 5, 6],
+  next: [4, 5, 6, 7, 8, 9],
+  later: [7, 8, 9, 10, 11, 12],
+}
+
+export function isMonthInColumnRange(targetMonth: string, column: string): boolean {
+  const range = COLUMN_MONTH_RANGES[column]
+  if (!range) return true // parked, released — no range constraint
+  const month = parseInt(targetMonth.split('-')[1])
+  return range.includes(month)
+}
 
 export const CRITERION_CONFIG: Record<Criterion, { label: string; color: string; bg: string; border: string; badge: string }> = {
   execution_ready: { label: 'Execution ready', color: '#085041', bg: '#E1F5EE', border: '#5DCAA5', badge: '#E1F5EE' },

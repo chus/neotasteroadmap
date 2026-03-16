@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { CRITERION_CONFIG, EFFORT_CONFIG, MONTH_SHORT } from '@/lib/constants'
+import { CRITERION_CONFIG, EFFORT_CONFIG, MONTH_SHORT, isMonthInColumnRange } from '@/lib/constants'
 import ReactionBar from './ReactionBar'
 import type { Initiative, Criterion, ReactionCount } from '@/types'
 
@@ -261,11 +261,20 @@ export default function InitiativeCard({ initiative, dimmed, onEdit, onDelete, o
                   </span>
                 )
               })()}
-              {initiative.target_month && MONTH_SHORT[initiative.target_month] && (
-                <span className="text-[10px] font-medium text-neutral-400 bg-neutral-100 rounded px-1.5 py-0.5">
-                  {MONTH_SHORT[initiative.target_month]}
-                </span>
-              )}
+              {initiative.target_month && MONTH_SHORT[initiative.target_month] && (() => {
+                const outOfRange = !isMonthInColumnRange(initiative.target_month!, initiative.column)
+                return (
+                  <span
+                    className="text-[10px] font-medium rounded px-1.5 py-0.5"
+                    style={outOfRange
+                      ? { backgroundColor: '#FAEEDA', color: '#633806' }
+                      : { backgroundColor: '#f5f5f5', color: '#999' }}
+                    title={outOfRange ? `${MONTH_SHORT[initiative.target_month!]} is outside the typical range for this column` : undefined}
+                  >
+                    {MONTH_SHORT[initiative.target_month!]}{outOfRange ? ' ⚠' : ''}
+                  </span>
+                )
+              })()}
             </div>
             <div>
               {initiative.effort && EFFORT_CONFIG[initiative.effort] && (

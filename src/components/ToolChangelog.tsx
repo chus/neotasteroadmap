@@ -1,0 +1,238 @@
+'use client'
+
+import { useState } from 'react'
+
+// TOOL CHANGELOG
+// Add new entries at the TOP of this array when shipping new features.
+// Format: { date: 'YYYY-MM-DD', title: '...', description: '...', category: '...' }
+// Categories: core | board | integration | analytics | portal | sharing
+const TOOL_CHANGELOG = [
+  {
+    date: '2026-03-16',
+    title: 'Key account edit flow',
+    description: 'Key account strips on the board now have edit, delete, link, and unlink functionality. Changes reflect immediately without a page reload.',
+    category: 'board',
+  },
+  {
+    date: '2026-03-16',
+    title: 'Linear drift detection',
+    description: 'Daily sync check compares Linear project state to roadmap. Amber badge on cards with detected drift. Resolve by applying Linear changes, pushing roadmap to Linear, or dismissing.',
+    category: 'integration',
+  },
+  {
+    date: '2026-03-16',
+    title: 'Enhanced Linear pull',
+    description: 'Pulling from Linear now brings in project progress, team members, project lead, milestone, and the last 5 project updates \u2014 shown in the initiative slide-over.',
+    category: 'integration',
+  },
+  {
+    date: '2026-03-15',
+    title: 'Target month / column mismatch warnings',
+    description: 'Cards with a target month outside their column range show an amber warning badge. Column headers now show the full month range (e.g. Jan \u2192 Jun under Now).',
+    category: 'board',
+  },
+  {
+    date: '2026-03-15',
+    title: 'Parked criterion auto-moves card',
+    description: 'Setting an initiative\u2019s criterion to Parked automatically moves it to the Parked column. Dragging to Parked auto-sets the criterion.',
+    category: 'board',
+  },
+  {
+    date: '2026-03-15',
+    title: 'Strategic bets and key account dependencies',
+    description: 'Parent initiatives (year-spanning strategic bets) appear as banners above the board with phase tracking and linked child initiatives. Key account strips show business commitments that create capacity constraints.',
+    category: 'board',
+  },
+  {
+    date: '2026-03-15',
+    title: 'Released column and public changelog',
+    description: 'Dragging a card to Released triggers a release note prompt. Released initiatives appear on the public /releases changelog grouped by month.',
+    category: 'board',
+  },
+  {
+    date: '2026-03-14',
+    title: 'Linear integration \u2014 Phase 1',
+    description: 'Push initiatives to Linear projects, pull Linear state back, import from Linear, and link existing initiatives to Linear projects. Sync log tracks all push/pull history.',
+    category: 'integration',
+  },
+  {
+    date: '2026-03-14',
+    title: 'View modes: swimlane and list',
+    description: 'Toggle between Board, Swimlane (by strategic level), and List (sortable table with CSV export) using the segmented control in the filter bar.',
+    category: 'board',
+  },
+  {
+    date: '2026-03-14',
+    title: 'Target month overlay',
+    description: 'Optional target month field on each initiative. Shows as a small badge on cards. Stats page includes monthly distribution chart.',
+    category: 'board',
+  },
+  {
+    date: '2026-03-14',
+    title: 'Effort estimates',
+    description: 'T-shirt size effort field (XS \u2192 XL) on each initiative. Stats page shows effort distribution and a capacity planning view based on team size.',
+    category: 'board',
+  },
+  {
+    date: '2026-03-14',
+    title: 'Public board and stakeholder view',
+    description: '/public shows initiatives marked as public. /stakeholder is a simplified view for non-product stakeholders. Both are shareable without login.',
+    category: 'sharing',
+  },
+  {
+    date: '2026-03-14',
+    title: 'Stats and insights page',
+    description: '/stats shows distribution by column, strategic level, criterion, effort, and month. Auto-generated insight sentences flag bottlenecks and imbalances.',
+    category: 'analytics',
+  },
+  {
+    date: '2026-03-13',
+    title: 'Feature request portal',
+    description: 'Public portal at /requests for submitting and voting on feature requests. Working Backwards intake form. AI triage suggests strategic level and flags weak evidence. Requests can be promoted directly to the roadmap.',
+    category: 'portal',
+  },
+  {
+    date: '2026-03-13',
+    title: 'Activity log',
+    description: 'All mutations (moves, edits, releases, promotions, votes) are logged to /activity with actor name, field changed, and before/after values.',
+    category: 'core',
+  },
+  {
+    date: '2026-03-13',
+    title: 'Dynamic strategic levels',
+    description: 'Strategic levels (Discovery, Churn, etc.) are DB-driven and manageable from /settings. Each has a color used throughout the board.',
+    category: 'core',
+  },
+  {
+    date: '2026-03-13',
+    title: 'NeoTaste branding and navigation',
+    description: 'Dark green nav with NeoTaste logo, brand green accent, and Made by Agus footer. Consistent across all pages.',
+    category: 'core',
+  },
+  {
+    date: '2026-03-12',
+    title: 'Initial launch',
+    description: 'Board with Now / Next / Later / Parked columns. Initiative cards with criterion color coding. Drag and drop. Search and track filters. Add, edit, delete initiatives.',
+    category: 'core',
+  },
+]
+
+const CATEGORY_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  core:        { label: 'Core',        color: '#888780', bg: '#F1EFE8' },
+  board:       { label: 'Board',       color: '#085041', bg: '#E1F5EE' },
+  integration: { label: 'Integration', color: '#3C3489', bg: '#EEEDFE' },
+  analytics:   { label: 'Analytics',   color: '#0C447C', bg: '#E6F1FB' },
+  portal:      { label: 'Portal',      color: '#633806', bg: '#FAEEDA' },
+  sharing:     { label: 'Sharing',     color: '#712B13', bg: '#FAECE7' },
+}
+
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00')
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+export default function ToolChangelog() {
+  const [activeCategory, setActiveCategory] = useState<string | null>(null)
+
+  const filtered = activeCategory
+    ? TOOL_CHANGELOG.filter((e) => e.category === activeCategory)
+    : TOOL_CHANGELOG
+
+  // Group by date
+  const grouped: { date: string; entries: typeof TOOL_CHANGELOG }[] = []
+  for (const entry of filtered) {
+    const existing = grouped.find((g) => g.date === entry.date)
+    if (existing) {
+      existing.entries.push(entry)
+    } else {
+      grouped.push({ date: entry.date, entries: [entry] })
+    }
+  }
+
+  const categories = Object.entries(CATEGORY_CONFIG)
+
+  return (
+    <div>
+      {/* Category filters */}
+      <div className="flex items-center gap-1.5 flex-wrap mb-6">
+        <button
+          onClick={() => setActiveCategory(null)}
+          className="text-[11px] font-medium px-2.5 py-1 rounded-full border transition-colors"
+          style={
+            activeCategory === null
+              ? { backgroundColor: '#0D2818', color: '#fff', borderColor: '#0D2818' }
+              : { backgroundColor: '#fff', color: '#666', borderColor: '#e5e5e5' }
+          }
+        >
+          All
+        </button>
+        {categories.map(([key, cfg]) => (
+          <button
+            key={key}
+            onClick={() => setActiveCategory(activeCategory === key ? null : key)}
+            className="text-[11px] font-medium px-2.5 py-1 rounded-full border transition-colors"
+            style={
+              activeCategory === key
+                ? { backgroundColor: cfg.bg, color: cfg.color, borderColor: cfg.color + '40' }
+                : { backgroundColor: '#fff', color: '#666', borderColor: '#e5e5e5' }
+            }
+          >
+            {cfg.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Timeline */}
+      <div className="space-y-0">
+        {grouped.map((group, gi) => (
+          <div key={group.date}>
+            {gi > 0 && <hr className="my-6 border-neutral-100" />}
+            <div className="text-[11px] font-medium text-neutral-400 uppercase tracking-wide mb-4">
+              {formatDate(group.date)}
+            </div>
+            <div className="space-y-4">
+              {group.entries.map((entry) => {
+                const cat = CATEGORY_CONFIG[entry.category]
+                return (
+                  <div key={entry.title} className="flex gap-3">
+                    {/* Timeline line + dot */}
+                    <div className="flex flex-col items-center pt-1.5 shrink-0">
+                      <div
+                        className="w-[6px] h-[6px] rounded-full shrink-0"
+                        style={{ backgroundColor: cat?.color ?? '#999' }}
+                      />
+                      <div className="w-px flex-1 bg-neutral-200 mt-1" />
+                    </div>
+                    {/* Content */}
+                    <div className="pb-2 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        {cat && (
+                          <span
+                            className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                            style={{ backgroundColor: cat.bg, color: cat.color }}
+                          >
+                            {cat.label}
+                          </span>
+                        )}
+                        <span className="text-[13px] font-medium text-neutral-800">
+                          {entry.title}
+                        </span>
+                      </div>
+                      <p className="text-[12px] text-neutral-500 leading-[1.6]">
+                        {entry.description}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {filtered.length === 0 && (
+        <p className="text-[12px] text-neutral-400 italic">No entries in this category.</p>
+      )}
+    </div>
+  )
+}

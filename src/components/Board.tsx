@@ -23,6 +23,7 @@ import StatsPanel from './StatsPanel'
 import Toast from './Toast'
 import DigestSubscribe from './DigestSubscribe'
 import ReleaseModal from './ReleaseModal'
+import KeyAccountStrip from './KeyAccountStrip'
 import {
   updateInitiativeColumn,
   updatePositions,
@@ -49,8 +50,8 @@ interface Props {
 export default function Board({ initialData, initialLevels, initialKeyAccounts = [], initialKeyAccountLinks = [], initialReactions = {} }: Props) {
   const [items, setItems] = useState<Initiative[]>(initialData)
   const [levels, setLevels] = useState<StrategicLevel[]>(initialLevels)
-  const [keyAccounts] = useState<KeyAccount[]>(initialKeyAccounts)
-  const [keyAccountLinks] = useState<KeyAccountInitiative[]>(initialKeyAccountLinks)
+  const [keyAccounts, setKeyAccounts] = useState<KeyAccount[]>(initialKeyAccounts)
+  const [keyAccountLinks, setKeyAccountLinks] = useState<KeyAccountInitiative[]>(initialKeyAccountLinks)
   const [reactionMap] = useState<Record<string, ReactionCount[]>>(initialReactions)
   const [activeFilterLevelId, setActiveFilterLevelId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -437,35 +438,32 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
             <div className="mb-6 space-y-2">
               <div className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-2">Key account dependencies</div>
               {keyAccounts.map((account) => {
-                const linkedIds = keyAccountLinks
-                  .filter((l) => l.key_account_id === account.id)
-                  .map((l) => l.initiative_id)
+                const accountLinks = keyAccountLinks.filter((l) => l.key_account_id === account.id)
+                const linkedIds = accountLinks.map((l) => l.initiative_id)
                 const linkedInitiatives = items.filter((i) => linkedIds.includes(i.id))
                 if (linkedInitiatives.length === 0) return null
                 return (
-                  <div
+                  <KeyAccountStrip
                     key={account.id}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg border border-neutral-200 bg-neutral-50"
-                  >
-                    <div className="flex items-center gap-2 shrink-0 min-w-[140px]">
-                      <span className="w-2 h-2 rounded-full bg-amber-400" />
-                      <span className="text-[12px] font-medium text-neutral-700 truncate">{account.name}</span>
-                      {account.company && (
-                        <span className="text-[10px] text-neutral-400">{account.company}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {linkedInitiatives.map((init) => (
-                        <button
-                          key={init.id}
-                          onClick={() => handleCardClick(init)}
-                          className="text-[11px] font-medium px-2 py-0.5 rounded bg-white border border-neutral-200 text-neutral-600 hover:border-neutral-400 truncate max-w-[200px]"
-                        >
-                          {init.title}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                    account={account}
+                    linkedInitiatives={linkedInitiatives}
+                    allInitiatives={items}
+                    links={accountLinks}
+                    onCardClick={handleCardClick}
+                    onAccountUpdate={(updated) => {
+                      setKeyAccounts((prev) => prev.map((ka) => ka.id === updated.id ? updated : ka))
+                    }}
+                    onAccountDelete={(id) => {
+                      setKeyAccounts((prev) => prev.filter((ka) => ka.id !== id))
+                      setKeyAccountLinks((prev) => prev.filter((l) => l.key_account_id !== id))
+                    }}
+                    onLinkChange={(accountId, updatedLinks) => {
+                      setKeyAccountLinks((prev) => [
+                        ...prev.filter((l) => l.key_account_id !== accountId),
+                        ...updatedLinks,
+                      ])
+                    }}
+                  />
                 )
               })}
             </div>
@@ -551,6 +549,7 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
                     columnId={col.id}
                     label={col.label}
                     sublabel={col.sublabel}
+                    months={col.months}
                     initiatives={getColumnItems(col.id)}
                     activeFilterLevelId={activeFilterLevelId}
                     searchQuery={searchQuery}

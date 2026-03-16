@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { CRITERION_CONFIG, COLUMNS, EFFORT_CONFIG, MONTHS_2026, MONTH_SHORT, PHASE_CONFIG } from '@/lib/constants'
+import { CRITERION_CONFIG, COLUMNS, EFFORT_CONFIG, MONTHS_2026, MONTH_SHORT, PHASE_CONFIG, isMonthInColumnRange } from '@/lib/constants'
 import { getLinkedRequest, pushToLinear, pullFromLinear, unlinkFromLinear, getLinearSyncLog, getChildInitiatives, getReactionsForInitiative, runDriftDetection, applyLinearDrift, dismissDrift, pushAndResolveDrift, getInitiativeById } from '@/app/actions'
 import ReactionBar from './ReactionBar'
 import DecisionLog from './DecisionLog'
@@ -858,18 +858,17 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                 </div>
                 {(() => {
                   if (!form.target_month) return null
-                  const month = parseInt(form.target_month.split('-')[1])
-                  const colQuarters: Record<string, number[]> = {
-                    now: [1,2,3,4,5,6], next: [4,5,6,7,8,9],
-                    later: [7,8,9,10,11,12], parked: [],
-                  }
-                  const allowed = colQuarters[form.column] ?? []
                   if (form.column === 'parked') {
                     return <p className="text-[10px] text-amber-600 mt-1">Parked items typically don&apos;t have a target month.</p>
                   }
-                  if (allowed.length > 0 && !allowed.includes(month)) {
+                  if (!isMonthInColumnRange(form.target_month, form.column)) {
                     const colLabel = COLUMNS.find((c) => c.id === form.column)?.label ?? form.column
-                    return <p className="text-[10px] text-amber-600 mt-1">This month falls outside the typical range for the {colLabel} column.</p>
+                    const colMonths = COLUMNS.find((c) => c.id === form.column)?.months
+                    return (
+                      <p className="text-[10px] text-amber-600 mt-1">
+                        This month falls outside the typical range for the {colLabel} column{colMonths ? ` (${colMonths})` : ''}.
+                      </p>
+                    )
                   }
                   return null
                 })()}
