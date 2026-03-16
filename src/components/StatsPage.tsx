@@ -1,6 +1,7 @@
 'use client'
 
-import { COLUMNS, CRITERION_CONFIG, EFFORT_CONFIG, MONTHS_2026, MONTH_SHORT } from '@/lib/constants'
+import { useState, useEffect } from 'react'
+import { COLUMNS, CRITERION_CONFIG, EFFORT_CONFIG, MONTHS_2026, MONTH_SHORT, EFFORT_WEEKS } from '@/lib/constants'
 import type { Initiative, StrategicLevel, FeatureRequest, Criterion } from '@/types'
 
 const COLUMN_COLORS: Record<string, string> = {
@@ -114,6 +115,151 @@ function generateInsights(items: Initiative[], levels: StrategicLevel[], request
   }
 
   return insights.length > 0 ? insights : ['Roadmap looks balanced. No bottlenecks detected.']
+}
+
+function CapacitySection({ initiatives }: { initiatives: Initiative[] }) {
+  const [engineers, setEngineers] = useState(4)
+  const [weeksPerQ, setWeeksPerQ] = useState(10)
+
+  useEffect(() => {
+    const stored = localStorage.getItem('capacity_engineers')
+    const storedWeeks = localStorage.getItem('capacity_weeks')
+    if (stored) setEngineers(parseInt(stored))
+    if (storedWeeks) setWeeksPerQ(parseInt(storedWeeks))
+  }, [])
+
+  function updateEngineers(v: number) {
+    setEngineers(v)
+    localStorage.setItem('capacity_engineers', String(v))
+  }
+  function updateWeeks(v: number) {
+    setWeeksPerQ(v)
+    localStorage.setItem('capacity_weeks', String(v))
+  }
+
+  const totalCapacity = engineers * weeksPerQ
+  const activeCols = COLUMNS.filter((c) => c.id !== 'parked')
+
+  const colData = activeCols.map((col) => {
+    const colItems = initiatives.filter((i) => i.column === col.id)
+    const withEffort = colItems.filter((i) => i.effort && EFFORT_WEEKS[i.effort])
+    const totalWeeks = withEffort.reduce((sum, i) => sum + (EFFORT_WEEKS[i.effort!] ?? 0), 0)
+    const pct = totalCapacity > 0 ? (totalWeeks / totalCapacity) * 100 : 0
+    return { ...col, totalWeeks, withEffort: withEffort.length, total: colItems.length, pct }
+  })
+
+  const activeNowNext = initiatives.filter((i) => i.column === 'now' || i.column === 'next')
+  const noEstimate = activeNowNext.filter((i) => !i.effort).length
+  const noEstimatePct = activeNowNext.length > 0 ? noEstimate / activeNowNext.length : 0
+
+  const effortKeys = Object.keys(EFFORT_CONFIG)
+
+  return (
+    <section className="mb-8">
+      <h2 className="text-[14px] font-semibold text-neutral-800 mb-1">Capacity planning</h2>
+      <p className="text-[12px] text-neutral-400 mb-4">
+        Estimated effort in weeks across columns. Based on effort estimates — initiatives without estimates are excluded.
+      </p>
+
+      {/* Team capacity input */}
+      <div className="flex items-center gap-4 mb-5 p-3 rounded-lg border border-neutral-200 bg-neutral-50">
+        <div className="flex items-center gap-2">
+          <label className="text-[11px] text-neutral-500">Engineers</label>
+          <input
+            type="number"
+            min={1}
+            max={20}
+            value={engineers}
+            onChange={(e) => updateEngineers(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+            className="w-14 text-[13px] border border-neutral-200 rounded px-2 py-1 text-center outline-none focus:border-neutral-400"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-[11px] text-neutral-500">Weeks / quarter</label>
+          <input
+            type="number"
+            min={1}
+            max={16}
+            value={weeksPerQ}
+            onChange={(e) => updateWeeks(Math.max(1, Math.min(16, parseInt(e.target.value) || 1)))}
+            className="w-14 text-[13px] border border-neutral-200 rounded px-2 py-1 text-center outline-none focus:border-neutral-400"
+          />
+        </div>
+        <div className="text-[12px] text-neutral-500">
+          Total capacity: <strong className="text-neutral-700">{totalCapacity} engineer-weeks</strong>
+        </div>
+      </div>
+
+      {/* Effort by column */}
+      <div className="grid grid-cols-3 gap-4 mb-5">
+        {colData.map((col) => {
+          const barColor = col.pct > 100 ? '#ef4444' : col.pct > 80 ? '#f59e0b' : '#10b981'
+          return (
+            <div key={col.id}>
+              <div className="text-[11px] uppercase tracking-wider font-medium text-neutral-500 mb-1">{col.label}</div>
+              <div className="text-[20px] font-semibold text-neutral-800">{col.totalWeeks}<span className="text-[12px] font-normal text-neutral-400"> weeks</span></div>
+              <div className="h-3 bg-neutral-100 rounded-full overflow-hidden mt-1.5">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{ width: `${Math.min(col.pct, 100)}%`, backgroundColor: barColor }}
+                />
+              </div>
+              <p className="text-[10px] text-neutral-400 mt-1">
+                {col.withEffort} of {col.total} initiatives have effort estimates
+              </p>
+              {col.pct > 100 && (
+                <p className="text-[10px] text-red-500 mt-1">
+                  Exceeds capacity by {(col.totalWeeks - totalCapacity).toFixed(1)} weeks. Consider moving items to Next or reducing scope.
+                </p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Effort breakdown table */}
+      <div className="mb-4">
+        <table className="w-full text-[12px]" style={{ maxWidth: 400 }}>
+          <thead>
+            <tr className="text-[10px] uppercase tracking-wide text-neutral-400 border-b border-neutral-200">
+              <th className="py-2 text-left font-medium">Effort</th>
+              {activeCols.map((c) => (
+                <th key={c.id} className="py-2 text-center font-medium">{c.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {effortKeys.map((ek) => (
+              <tr key={ek} className="border-b border-neutral-100">
+                <td className="py-2 font-medium text-neutral-600">{EFFORT_CONFIG[ek].label}</td>
+                {activeCols.map((c) => {
+                  const count = initiatives.filter((i) => i.effort === ek && i.column === c.id).length
+                  const nowCapPct = colData.find((d) => d.id === 'now')?.pct ?? 0
+                  const isRisk = (ek === 'l' || ek === 'xl') && c.id === 'now' && nowCapPct > 80 && count > 0
+                  return (
+                    <td
+                      key={c.id}
+                      className="py-2 text-center text-neutral-600"
+                      style={isRisk ? { backgroundColor: '#fef3c7' } : undefined}
+                    >
+                      {count}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Missing estimates callout */}
+      {noEstimatePct > 0.3 && (
+        <div className="text-[12px] text-neutral-500 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          {noEstimate} initiative{noEstimate !== 1 ? 's' : ''} in Now/Next {noEstimate !== 1 ? 'have' : 'has'} no effort estimate — capacity totals may be understated.
+        </div>
+      )}
+    </section>
+  )
 }
 
 export default function StatsPage({ initiatives, levels, requests }: Props) {
@@ -361,6 +507,9 @@ export default function StatsPage({ initiatives, levels, requests }: Props) {
           )
         })()}
       </section>
+
+      {/* Capacity planning */}
+      <CapacitySection initiatives={initiatives} />
 
       {/* Monthly distribution */}
       <section className="mb-8">

@@ -129,6 +129,14 @@ export const INITIATIVE_TEMPLATES: InitiativeTemplate[] = [
   },
 ]
 
+export const EFFORT_WEEKS: Record<string, number> = {
+  xs: 0.5,
+  s: 1,
+  m: 2,
+  l: 4,
+  xl: 8,
+}
+
 export const PARENT_COLORS = [
   '#5E6AD2', '#E5484D', '#F76B15', '#12A594', '#E93D82',
   '#0091FF', '#7C66DC', '#CD5EB0', '#30A46C', '#FFC53D',
