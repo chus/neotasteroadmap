@@ -23,7 +23,7 @@ async function linearFetch<T>(query: string, variables?: Record<string, unknown>
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: apiKey,
     },
     body: JSON.stringify({ query, variables }),
   })
