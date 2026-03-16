@@ -103,6 +103,16 @@ export const keyAccountInitiatives = pgTable('key_account_initiatives', {
   unique('kai_account_initiative_unique').on(table.key_account_id, table.initiative_id),
 ])
 
+export const initiativeReactions = pgTable('initiative_reactions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  initiative_id: uuid('initiative_id').notNull().references(() => initiatives.id, { onDelete: 'cascade' }),
+  emoji: text('emoji').notNull(),
+  reactor_fingerprint: text('reactor_fingerprint').notNull(),
+  created_at: timestamp('created_at').defaultNow(),
+}, (table) => [
+  unique('ir_initiative_emoji_fingerprint').on(table.initiative_id, table.emoji, table.reactor_fingerprint),
+])
+
 export const activityLog = pgTable('activity_log', {
   id: uuid('id').defaultRandom().primaryKey(),
   action: text('action').notNull(),

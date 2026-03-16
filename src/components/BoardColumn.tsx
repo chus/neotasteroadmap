@@ -3,7 +3,7 @@
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import InitiativeCard from './InitiativeCard'
-import type { Initiative, Column } from '@/types'
+import type { Initiative, Column, ReactionCount } from '@/types'
 
 interface Props {
   columnId: Column
@@ -17,6 +17,7 @@ interface Props {
   onDelete: (id: string) => void
   onAddClick: (column: Column) => void
   onCardClick: (initiative: Initiative) => void
+  reactionMap?: Record<string, ReactionCount[]>
 }
 
 export default function BoardColumn({
@@ -31,6 +32,7 @@ export default function BoardColumn({
   onDelete,
   onAddClick,
   onCardClick,
+  reactionMap,
 }: Props) {
   const { setNodeRef } = useDroppable({ id: columnId })
 
@@ -72,6 +74,7 @@ export default function BoardColumn({
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onClick={onCardClick}
+                reactions={reactionMap?.[initiative.id]}
               />
             ))
           ) : (

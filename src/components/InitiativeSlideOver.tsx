@@ -2,8 +2,9 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { CRITERION_CONFIG, COLUMNS, EFFORT_CONFIG, MONTHS_2026, MONTH_SHORT, PHASE_CONFIG } from '@/lib/constants'
-import { getLinkedRequest, pushToLinear, pullFromLinear, unlinkFromLinear, getLinearSyncLog, getChildInitiatives } from '@/app/actions'
-import type { Initiative, StrategicLevel, FeatureRequest, Criterion, Column, Phase, LinearSyncLogEntry } from '@/types'
+import { getLinkedRequest, pushToLinear, pullFromLinear, unlinkFromLinear, getLinearSyncLog, getChildInitiatives, getReactionsForInitiative } from '@/app/actions'
+import ReactionBar from './ReactionBar'
+import type { Initiative, StrategicLevel, FeatureRequest, Criterion, Column, Phase, LinearSyncLogEntry, ReactionCount } from '@/types'
 
 function timeAgo(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
@@ -75,6 +76,8 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
   const [syncLogExpanded, setSyncLogExpanded] = useState(false)
   const [children, setChildren] = useState<Initiative[]>([])
   const [childrenLoading, setChildrenLoading] = useState(false)
+  const [reactions, setReactions] = useState<ReactionCount[]>([])
+  const [reactionsLoading, setReactionsLoading] = useState(true)
 
   const initialForm = useMemo(() => makeForm(initiative), [initiative])
   const [form, setForm] = useState(initialForm)
@@ -133,6 +136,13 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
         .finally(() => setChildrenLoading(false))
     }
   }, [initiative.id, initiative.is_parent])
+
+  useEffect(() => {
+    setReactionsLoading(true)
+    getReactionsForInitiative(initiative.id)
+      .then(setReactions)
+      .finally(() => setReactionsLoading(false))
+  }, [initiative.id])
 
   function handleBackdropClick(e: React.MouseEvent) {
     if (e.target === backdropRef.current) handleClose()
@@ -418,6 +428,13 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                   </span>
                 </div>
               </section>
+
+              {/* Reactions */}
+              {!reactionsLoading && (
+                <div className="mt-4">
+                  <ReactionBar initiativeId={initiative.id} initialReactions={reactions} />
+                </div>
+              )}
 
               {/* Phase stepper (parent only) */}
               {initiative.is_parent && initiative.phase && (

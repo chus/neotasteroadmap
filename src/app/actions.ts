@@ -1,11 +1,12 @@
 'use server'
 
 import { db } from '@/db'
-import { initiatives, strategicLevels, featureRequests, votes, requestComments, activityLog, linearSyncLog, keyAccounts, keyAccountInitiatives } from '@/db/schema'
-import { eq, asc, desc, sql, isNull, ilike, or } from 'drizzle-orm'
+import { initiatives, strategicLevels, featureRequests, votes, requestComments, activityLog, linearSyncLog, keyAccounts, keyAccountInitiatives, initiativeReactions } from '@/db/schema'
+import { eq, asc, desc, sql, isNull, ilike, or, inArray, and } from 'drizzle-orm'
 import { createHash } from 'crypto'
 import { headers } from 'next/headers'
-import type { Initiative, StrategicLevel, Column, FeatureRequest, RequestStatus, Criterion, Phase, RequestComment, LinearSyncLogEntry, KeyAccount, KeyAccountInitiative } from '@/types'
+import { getFingerprint } from '@/lib/fingerprint'
+import type { Initiative, StrategicLevel, Column, FeatureRequest, RequestStatus, Criterion, Phase, RequestComment, LinearSyncLogEntry, KeyAccount, KeyAccountInitiative, ReactionCount } from '@/types'
 
 // ─── Initiatives ───
 
@@ -1096,4 +1097,127 @@ export async function getAllKeyAccountLinks(): Promise<KeyAccountInitiative[]> {
     note: r.note ?? '',
     created_at: r.created_at ?? new Date(),
   }))
+}
+
+// ─── Reactions ───
+
+const REACTION_EMOJIS = ['👍', '🔥', '😬', '🤔', '❤️']
+
+export async function getReactionsForInitiative(initiativeId: string): Promise<ReactionCount[]> {
+  const fingerprint = await getFingerprint()
+
+  const rows = await db
+    .select({
+      emoji: initiativeReactions.emoji,
+      count: sql<number>`count(*)`,
+    })
+    .from(initiativeReactions)
+    .where(eq(initiativeReactions.initiative_id, initiativeId))
+    .groupBy(initiativeReactions.emoji)
+
+  const myReactions = await db
+    .select({ emoji: initiativeReactions.emoji })
+    .from(initiativeReactions)
+    .where(
+      and(
+        eq(initiativeReactions.initiative_id, initiativeId),
+        eq(initiativeReactions.reactor_fingerprint, fingerprint)
+      )
+    )
+  const mySet = new Set(myReactions.map((r) => r.emoji))
+  const countMap = new Map(rows.map((r) => [r.emoji, Number(r.count)]))
+
+  return REACTION_EMOJIS.map((emoji) => ({
+    emoji,
+    count: countMap.get(emoji) ?? 0,
+    reacted: mySet.has(emoji),
+  }))
+}
+
+export async function getReactionsForInitiatives(initiativeIds: string[]): Promise<Record<string, ReactionCount[]>> {
+  if (initiativeIds.length === 0) return {}
+
+  const fingerprint = await getFingerprint()
+
+  const rows = await db
+    .select({
+      initiative_id: initiativeReactions.initiative_id,
+      emoji: initiativeReactions.emoji,
+      count: sql<number>`count(*)`,
+    })
+    .from(initiativeReactions)
+    .where(inArray(initiativeReactions.initiative_id, initiativeIds))
+    .groupBy(initiativeReactions.initiative_id, initiativeReactions.emoji)
+
+  const myReactions = await db
+    .select({
+      initiative_id: initiativeReactions.initiative_id,
+      emoji: initiativeReactions.emoji,
+    })
+    .from(initiativeReactions)
+    .where(
+      and(
+        inArray(initiativeReactions.initiative_id, initiativeIds),
+        eq(initiativeReactions.reactor_fingerprint, fingerprint)
+      )
+    )
+
+  const mySet = new Set(myReactions.map((r) => `${r.initiative_id}:${r.emoji}`))
+
+  // Build map
+  const countMap = new Map<string, Map<string, number>>()
+  for (const r of rows) {
+    if (!countMap.has(r.initiative_id)) countMap.set(r.initiative_id, new Map())
+    countMap.get(r.initiative_id)!.set(r.emoji, Number(r.count))
+  }
+
+  const result: Record<string, ReactionCount[]> = {}
+  for (const id of initiativeIds) {
+    const emojiCounts = countMap.get(id)
+    result[id] = REACTION_EMOJIS.map((emoji) => ({
+      emoji,
+      count: emojiCounts?.get(emoji) ?? 0,
+      reacted: mySet.has(`${id}:${emoji}`),
+    }))
+  }
+  return result
+}
+
+export async function toggleReaction(initiativeId: string, emoji: string): Promise<ReactionCount[]> {
+  if (!REACTION_EMOJIS.includes(emoji)) throw new Error('Invalid emoji')
+
+  const fingerprint = await getFingerprint()
+
+  // Check if reaction exists
+  const [existing] = await db
+    .select({ id: initiativeReactions.id })
+    .from(initiativeReactions)
+    .where(
+      and(
+        eq(initiativeReactions.initiative_id, initiativeId),
+        eq(initiativeReactions.emoji, emoji),
+        eq(initiativeReactions.reactor_fingerprint, fingerprint)
+      )
+    )
+
+  if (existing) {
+    await db.delete(initiativeReactions).where(eq(initiativeReactions.id, existing.id))
+  } else {
+    try {
+      await db.insert(initiativeReactions).values({
+        initiative_id: initiativeId,
+        emoji,
+        reactor_fingerprint: fingerprint,
+      })
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err)
+      if (message.includes('unique') || message.includes('duplicate') || message.includes('violates')) {
+        // Already reacted — ignore
+      } else {
+        throw err
+      }
+    }
+  }
+
+  return getReactionsForInitiative(initiativeId)
 }

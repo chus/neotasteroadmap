@@ -57,6 +57,12 @@ export interface KeyAccountInitiative {
   created_at: Date
 }
 
+export interface ReactionCount {
+  emoji: string
+  count: number
+  reacted: boolean
+}
+
 export interface LinearSyncLogEntry {
   id: string
   initiative_id: string

@@ -30,7 +30,7 @@ import {
   getStrategicLevels as fetchLevels,
 } from '@/app/actions'
 import { COLUMNS } from '@/lib/constants'
-import type { Initiative, StrategicLevel, Column, Criterion, KeyAccount, KeyAccountInitiative } from '@/types'
+import type { Initiative, StrategicLevel, Column, Criterion, KeyAccount, KeyAccountInitiative, ReactionCount } from '@/types'
 import { PHASE_CONFIG } from '@/lib/constants'
 
 type ViewMode = 'board' | 'swimlane' | 'list'
@@ -40,13 +40,15 @@ interface Props {
   initialLevels: StrategicLevel[]
   initialKeyAccounts?: KeyAccount[]
   initialKeyAccountLinks?: KeyAccountInitiative[]
+  initialReactions?: Record<string, ReactionCount[]>
 }
 
-export default function Board({ initialData, initialLevels, initialKeyAccounts = [], initialKeyAccountLinks = [] }: Props) {
+export default function Board({ initialData, initialLevels, initialKeyAccounts = [], initialKeyAccountLinks = [], initialReactions = {} }: Props) {
   const [items, setItems] = useState<Initiative[]>(initialData)
   const [levels, setLevels] = useState<StrategicLevel[]>(initialLevels)
   const [keyAccounts] = useState<KeyAccount[]>(initialKeyAccounts)
   const [keyAccountLinks] = useState<KeyAccountInitiative[]>(initialKeyAccountLinks)
+  const [reactionMap] = useState<Record<string, ReactionCount[]>>(initialReactions)
   const [activeFilterLevelId, setActiveFilterLevelId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -513,6 +515,7 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
                   onDelete={handleDeleteFromCard}
                   onAddClick={setAddingToColumn}
                   onCardClick={handleCardClick}
+                  reactionMap={reactionMap}
                 />
               ))}
             </div>
@@ -542,6 +545,7 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
                 onDelete={handleDeleteFromCard}
                 onAddClick={setAddingToColumn}
                 onCardClick={handleCardClick}
+                reactionMap={reactionMap}
               />
             </div>
 

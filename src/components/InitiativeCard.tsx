@@ -5,7 +5,8 @@ import { createPortal } from 'react-dom'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { CRITERION_CONFIG, EFFORT_CONFIG, MONTH_SHORT } from '@/lib/constants'
-import type { Initiative, Criterion } from '@/types'
+import ReactionBar from './ReactionBar'
+import type { Initiative, Criterion, ReactionCount } from '@/types'
 
 interface Props {
   initiative: Initiative
@@ -13,6 +14,7 @@ interface Props {
   onEdit: (initiative: Initiative) => void
   onDelete: (id: string) => void
   onClick: (initiative: Initiative) => void
+  reactions?: ReactionCount[]
 }
 
 function CardDropdown({
@@ -77,7 +79,7 @@ function CardDropdown({
   )
 }
 
-export default function InitiativeCard({ initiative, dimmed, onEdit, onDelete, onClick }: Props) {
+export default function InitiativeCard({ initiative, dimmed, onEdit, onDelete, onClick, reactions }: Props) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [triggerRect, setTriggerRect] = useState<DOMRect | null>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -254,6 +256,13 @@ export default function InitiativeCard({ initiative, dimmed, onEdit, onDelete, o
                 </span>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Reactions — show on hover, or always if any have count > 0 */}
+        {reactions && (
+          <div className={`mt-1 ${reactions.some((r) => r.count > 0) ? '' : 'hidden group-hover:block'}`}>
+            <ReactionBar initiativeId={initiative.id} initialReactions={reactions} compact />
           </div>
         )}
       </div>
