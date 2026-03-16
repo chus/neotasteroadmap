@@ -6,7 +6,7 @@ import Footer from './Footer'
 
 export default function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const isPublic = pathname === '/public'
+  const isPublic = pathname === '/public' || pathname === '/stakeholder'
 
   if (isPublic) {
     return <>{children}</>
