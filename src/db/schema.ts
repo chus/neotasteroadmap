@@ -49,6 +49,7 @@ export const featureRequests = pgTable('feature_requests', {
   submitter_email: text('submitter_email').default(''),
   status: text('status').default('open'),
   admin_note: text('admin_note').default(''),
+  ai_triage: text('ai_triage'),
   roadmap_initiative_id: uuid('roadmap_initiative_id').references(() => initiatives.id),
   vote_count: integer('vote_count').default(0),
   created_at: timestamp('created_at').defaultNow(),

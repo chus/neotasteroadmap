@@ -132,7 +132,16 @@ export default function RequestsFeed({ initialRequests, strategicLevels, initial
       <div className="space-y-2">
         {filtered.length > 0 ? (
           filtered.map((r) => (
-            <RequestCard key={r.id} request={r} isAdmin={isAdmin} votedIds={votedIds} onVoted={markVoted} onPromote={setPromotingRequest} commentCount={commentCounts[r.id] ?? 0} />
+            <RequestCard
+              key={r.id}
+              request={r}
+              isAdmin={isAdmin}
+              votedIds={votedIds}
+              onVoted={markVoted}
+              onPromote={setPromotingRequest}
+              onRequestUpdate={(updated) => setRequests((prev) => prev.map((req) => req.id === updated.id ? updated : req))}
+              commentCount={commentCounts[r.id] ?? 0}
+            />
           ))
         ) : (
           <div className="text-center py-12">

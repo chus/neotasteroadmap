@@ -110,6 +110,7 @@ export interface FeatureRequest {
   submitter_email: string
   status: RequestStatus
   admin_note: string
+  ai_triage: string | null
   roadmap_initiative_id: string | null
   vote_count: number
   created_at: Date

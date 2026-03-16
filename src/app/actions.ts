@@ -368,6 +368,7 @@ function mapFeatureRequest(r: typeof featureRequests.$inferSelect): FeatureReque
     submitter_email: r.submitter_email ?? '',
     status: (r.status ?? 'open') as RequestStatus,
     admin_note: r.admin_note ?? '',
+    ai_triage: r.ai_triage ?? null,
     roadmap_initiative_id: r.roadmap_initiative_id,
     vote_count: r.vote_count ?? 0,
     created_at: r.created_at ?? new Date(),
@@ -400,6 +401,8 @@ export async function createFeatureRequest(data: {
   submitter_email?: string
 }): Promise<FeatureRequest> {
   const [row] = await db.insert(featureRequests).values(data).returning()
+  // Fire-and-forget AI triage
+  triageFeatureRequest(row.id).catch(() => {})
   return mapFeatureRequest(row)
 }
 
@@ -1427,4 +1430,126 @@ export async function updateDecisionEntry(
 
 export async function deleteDecisionEntry(id: string) {
   await db.delete(decisionLog).where(eq(decisionLog.id, id))
+}
+
+// ─── AI Triage ───
+
+export async function triageFeatureRequest(requestId: string) {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) return
+
+  const [request] = await db.select().from(featureRequests).where(eq(featureRequests.id, requestId))
+  if (!request) return
+
+  // Get strategic levels and existing initiatives for context
+  const levels = await db.select().from(strategicLevels).orderBy(asc(strategicLevels.position))
+  const existingInitiatives = await db.select({ id: initiatives.id, title: initiatives.title, column: initiatives.column, criterion: initiatives.criterion }).from(initiatives).orderBy(asc(initiatives.position))
+
+  const levelNames = levels.map((l) => l.name).join(', ')
+  const initiativeList = existingInitiatives.map((i) => `- "${i.title}" (${i.column}, ${i.criterion})`).join('\n')
+
+  const prompt = `You are a product triage assistant. Analyze this feature request and return a JSON object with your assessment.
+
+Feature request:
+- Title: ${request.title}
+- Customer problem: ${request.customer_problem}
+- Current behaviour: ${request.current_behaviour}
+- Desired outcome: ${request.desired_outcome}
+- Success metric: ${request.success_metric}
+- Customer evidence: ${request.customer_evidence}
+- Submitter: ${request.submitter_name}${request.submitter_role ? ` (${request.submitter_role})` : ''}
+
+Available strategic levels: ${levelNames || 'None defined'}
+Available criteria: execution_ready (scoped and ready), foundation (infrastructure/tooling), dependency (external team), research (needs investigation), parked (deprioritized)
+Available columns: now (Q1-Q2), next (Q2-Q3), later (Q3-Q4), parked (out of scope 2026)
+
+Existing roadmap initiatives:
+${initiativeList || 'None yet'}
+
+Return ONLY a valid JSON object (no markdown, no code fences) with these fields:
+{
+  "suggested_strategic_level": "name of the best-fit strategic level or null",
+  "suggested_criterion": "one of: execution_ready, foundation, dependency, research, parked",
+  "suggested_column": "one of: now, next, later, parked",
+  "evidence_quality": "strong | moderate | weak",
+  "evidence_note": "one sentence explaining the evidence quality assessment",
+  "duplicate_risk": "high | medium | low | none",
+  "duplicate_of": "title of the most similar existing initiative, or null",
+  "summary": "one sentence summary of what this request is about",
+  "recommendation": "one sentence recommendation for the product team"
+}`
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 512,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    })
+
+    if (!response.ok) return
+
+    const result = await response.json()
+    const text = result.content?.[0]?.text
+    if (!text) return
+
+    // Validate it's valid JSON
+    JSON.parse(text)
+
+    await db.update(featureRequests).set({ ai_triage: text }).where(eq(featureRequests.id, requestId))
+  } catch {
+    // Silently fail — triage is best-effort
+  }
+}
+
+export async function dismissTriage(requestId: string) {
+  await db.update(featureRequests).set({ ai_triage: null }).where(eq(featureRequests.id, requestId))
+}
+
+export async function applyTriageSuggestions(requestId: string) {
+  const [request] = await db.select().from(featureRequests).where(eq(featureRequests.id, requestId))
+  if (!request?.ai_triage) return null
+
+  try {
+    const triage = JSON.parse(request.ai_triage)
+    const { suggested_strategic_level, suggested_criterion, suggested_column } = triage
+
+    // Find strategic level by name
+    let strategicLevelId: string | null = null
+    if (suggested_strategic_level) {
+      const [level] = await db.select().from(strategicLevels).where(ilike(strategicLevels.name, suggested_strategic_level))
+      if (level) strategicLevelId = level.id
+    }
+
+    // Create initiative from the request
+    const criterion = suggested_criterion || 'research'
+    const column = suggested_column || 'later'
+
+    const [initiative] = await db.insert(initiatives).values({
+      title: request.title,
+      subtitle: request.customer_problem.slice(0, 120),
+      strategic_level_id: strategicLevelId,
+      criterion,
+      column,
+      position: 0,
+      dep_note: `From feature request by ${request.submitter_name}`,
+    }).returning()
+
+    // Update request status to promoted
+    await db.update(featureRequests).set({
+      status: 'promoted',
+      roadmap_initiative_id: initiative.id,
+    }).where(eq(featureRequests.id, requestId))
+
+    return { initiativeId: initiative.id }
+  } catch {
+    return null
+  }
 }
