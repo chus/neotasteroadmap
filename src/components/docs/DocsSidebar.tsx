@@ -2,21 +2,50 @@
 
 import { useState, useEffect } from 'react'
 
-const SECTIONS = [
-  { id: 'context', label: 'Context' },
-  { id: 'goals', label: 'Goals' },
-  { id: 'how-it-works', label: 'How it works' },
-  { id: 'user-experience', label: 'User experience' },
-  { id: 'risks', label: 'Risks' },
-  { id: 'phases', label: 'Build phases' },
-  { id: 'success', label: 'Success metrics' },
-  { id: 'where', label: 'Where to find things' },
-  { id: 'principles', label: 'Principles' },
-  { id: 'changelog', label: 'Changelog' },
+const GROUPS = [
+  {
+    label: 'Roadmap',
+    sections: [
+      { id: 'the-board', label: 'The board' },
+      { id: 'columns', label: 'Columns' },
+      { id: 'criteria', label: 'Sequencing criteria' },
+      { id: 'strategic-bets', label: 'Strategic bets' },
+      { id: 'key-accounts', label: 'Key accounts' },
+      { id: 'initiative-detail', label: 'Initiative detail' },
+      { id: 'linear-sync', label: 'Linear sync' },
+      { id: 'views', label: 'Views' },
+      { id: 'stats', label: 'Stats' },
+      { id: 'feature-requests', label: 'Feature requests' },
+      { id: 'what-moves-things', label: 'What moves things' },
+    ],
+  },
+  {
+    label: 'Voice',
+    sections: [
+      { id: 'voice-context', label: 'Context and motivation' },
+      { id: 'voice-goals', label: 'What we are trying to achieve' },
+      { id: 'voice-how', label: 'How Voice works' },
+      { id: 'voice-ux', label: 'What users experience' },
+      { id: 'voice-risks', label: 'Risks' },
+      { id: 'voice-phases', label: 'Build phases' },
+      { id: 'voice-success', label: 'Success metrics' },
+      { id: 'voice-where', label: 'Where to find things' },
+      { id: 'voice-principles', label: 'Principles' },
+    ],
+  },
+  {
+    label: 'Meta',
+    sections: [
+      { id: 'tool-changelog', label: 'Tool changelog' },
+      { id: 'docs-changelog', label: 'Docs changelog' },
+    ],
+  },
 ]
 
+const ALL_SECTIONS = GROUPS.flatMap((g) => g.sections)
+
 export default function DocsSidebar({ children }: { children: React.ReactNode }) {
-  const [activeId, setActiveId] = useState('context')
+  const [activeId, setActiveId] = useState(ALL_SECTIONS[0].id)
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -31,7 +60,7 @@ export default function DocsSidebar({ children }: { children: React.ReactNode })
       { rootMargin: '-80px 0px -60% 0px', threshold: 0 }
     )
 
-    const headings = SECTIONS.map((s) => document.getElementById(s.id)).filter(Boolean)
+    const headings = ALL_SECTIONS.map((s) => document.getElementById(s.id)).filter(Boolean)
     headings.forEach((el) => observer.observe(el!))
 
     return () => observer.disconnect()
@@ -47,26 +76,30 @@ export default function DocsSidebar({ children }: { children: React.ReactNode })
   return (
     <div className="flex gap-12 max-w-[1000px] mx-auto">
       {/* Sidebar — desktop only */}
-      <aside className="hidden lg:block w-[200px] shrink-0">
+      <aside className="hidden lg:block w-[220px] shrink-0">
         <div className="sticky top-[80px]">
-          <p className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-3">
-            On this page
-          </p>
-          <nav className="space-y-1">
-            {SECTIONS.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => handleClick(s.id)}
-                className="block w-full text-left text-[13px] py-1 transition-colors"
-                style={{
-                  color: activeId === s.id ? 'var(--nt-green)' : '#888',
-                  fontWeight: activeId === s.id ? 500 : 400,
-                }}
-              >
-                {s.label}
-              </button>
-            ))}
-          </nav>
+          {GROUPS.map((group) => (
+            <div key={group.label} className="mb-5">
+              <p className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-2">
+                {group.label}
+              </p>
+              <nav className="space-y-0.5">
+                {group.sections.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => handleClick(s.id)}
+                    className="block w-full text-left text-[12px] py-1 transition-colors"
+                    style={{
+                      color: activeId === s.id ? 'var(--nt-green)' : '#888',
+                      fontWeight: activeId === s.id ? 500 : 400,
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </nav>
+            </div>
+          ))}
         </div>
       </aside>
 

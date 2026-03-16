@@ -7,7 +7,6 @@ const links = [
   { href: '/', label: 'Roadmap' },
   { href: '/stats', label: 'Stats' },
   { href: '/how-it-works', label: 'How it works' },
-  { href: '/docs', label: 'Docs' },
   { href: '/requests', label: 'Feature requests' },
   { href: '/feedback', label: 'Voice' },
 ]

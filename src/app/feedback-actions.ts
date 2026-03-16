@@ -19,6 +19,7 @@ export async function submitFeedback(data: {
   device?: string
   app_version?: string
   research_opt_in: boolean
+  submission_origin?: string
 }): Promise<{ success: boolean; id: string | null }> {
   try {
     const [row] = await db.insert(feedbackSubmissions).values({
@@ -33,6 +34,7 @@ export async function submitFeedback(data: {
       device: data.device || null,
       app_version: data.app_version || null,
       research_opt_in: data.research_opt_in,
+      submission_origin: data.submission_origin || 'https://neotasteroadmap.vercel.app',
     }).returning({ id: feedbackSubmissions.id })
 
     // Upsert research participant if opted in
@@ -62,7 +64,8 @@ export async function submitFeedback(data: {
 
     // Fire-and-forget confirmation email
     if (data.email) {
-      sendConfirmationEmail(data.email, data.name, data.title, data.research_opt_in).catch(() => {})
+      const origin = data.submission_origin || 'https://neotasteroadmap.vercel.app'
+      sendConfirmationEmail(data.email, data.name, data.title, data.research_opt_in, origin).catch(() => {})
     }
 
     return { success: true, id: row.id }
@@ -72,11 +75,11 @@ export async function submitFeedback(data: {
   }
 }
 
-async function sendConfirmationEmail(email: string, name: string, title: string, researchOptIn: boolean) {
+async function sendConfirmationEmail(email: string, name: string, title: string, researchOptIn: boolean, origin: string) {
   try {
     const { sendEmail } = await import('@/lib/email')
     const { feedbackConfirmation } = await import('@/lib/voice-email-templates')
-    const { subject, html } = feedbackConfirmation(name, title, researchOptIn)
+    const { subject, html } = feedbackConfirmation(name, title, researchOptIn, origin)
     await sendEmail(email, subject, html)
   } catch {
     // Best-effort
@@ -788,12 +791,14 @@ async function notifyFeedbackStatusChange(id: string) {
     if (!submission || !submission.email) return
     if (submission.status === 'new') return // Don't notify on initial status
 
+    const origin = submission.submission_origin || 'https://neotasteroadmap.vercel.app'
     const { sendEmail } = await import('@/lib/email')
     const { feedbackStatusUpdate } = await import('@/lib/voice-email-templates')
     const { subject, html } = feedbackStatusUpdate(
       submission.name,
       submission.title,
       submission.status as FeedbackStatus,
+      origin,
     )
     await sendEmail(submission.email, subject, html)
 
@@ -1170,6 +1175,13 @@ export async function getAgentRunHistory(): Promise<AgentRunLogEntry[]> {
     slack_posted: r.slack_posted ?? false,
     created_at: r.created_at!,
   }))
+}
+
+// ─── Manual Agent Trigger ───
+
+export async function triggerAgentManually() {
+  const { runFeedbackAgent } = await import('@/lib/feedback-agent')
+  return runFeedbackAgent()
 }
 
 // ─── Trend Stats ───

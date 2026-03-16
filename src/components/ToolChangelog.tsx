@@ -27,8 +27,8 @@ const TOOL_CHANGELOG = [
   },
   {
     date: '2026-03-17',
-    title: 'Voice docs update',
-    description: 'Updated /docs with problem backlog, daily agent, and trend stats sections. Added documentation changelog section.',
+    title: 'Unified documentation page',
+    description: 'Merged /docs and /how-it-works into a single unified page at /how-it-works. Two-part structure: roadmap guide + Voice documentation. Grouped sidebar navigation. /docs redirects permanently.',
     category: 'core',
   },
   {

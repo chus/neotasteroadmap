@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { triggerAgentManually } from '@/app/feedback-actions'
 import type { AgentRunLogEntry } from '@/types'
 
 interface Props {
@@ -17,17 +18,11 @@ export default function AgentHistory({ initialRuns }: Props) {
     setRunning(true)
     setRunResult(null)
     try {
-      const res = await fetch(`/api/feedback/agent?token=${encodeURIComponent('manual')}`)
-      if (res.ok) {
-        const report = await res.json()
-        setRunResult(JSON.stringify(report, null, 2))
-        // Refresh the list
-        window.location.reload()
-      } else {
-        setRunResult(`Error: ${res.status}`)
-      }
-    } catch (err) {
-      setRunResult('Failed to run agent')
+      const report = await triggerAgentManually()
+      setRunResult(JSON.stringify(report, null, 2))
+      window.location.reload()
+    } catch {
+      setRunResult('Agent run failed — check server logs')
     }
     setRunning(false)
   }

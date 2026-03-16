@@ -21,7 +21,8 @@ function layout(content: string): string {
 export function feedbackConfirmation(
   name: string,
   title: string,
-  researchOptIn: boolean
+  researchOptIn: boolean,
+  origin: string = 'https://neotasteroadmap.vercel.app'
 ): { subject: string; html: string } {
   const researchNote = researchOptIn
     ? `<p style="font-size:14px;color:#333;line-height:1.6;">You opted in to participate in research — we may reach out if we'd like to learn more about your experience.</p>`
@@ -37,7 +38,7 @@ export function feedbackConfirmation(
       </div>
       <p style="font-size:14px;color:#333;line-height:1.6;">Our product team reviews every submission. If we have questions or updates, we'll let you know.</p>
       ${researchNote}
-      <a href="https://neotasteroadmap.vercel.app/voice" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#0D2818;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;border-radius:8px;">View Voice portal</a>
+      <a href="${origin}/voice" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#0D2818;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;border-radius:8px;">View Voice portal</a>
     `),
   }
 }
@@ -58,6 +59,7 @@ export function feedbackStatusUpdate(
   name: string,
   title: string,
   status: string,
+  origin: string = 'https://neotasteroadmap.vercel.app'
 ): { subject: string; html: string } {
   const label = STATUS_LABELS[status] ?? status
   const message = STATUS_MESSAGES[status] ?? ''
@@ -71,7 +73,7 @@ export function feedbackStatusUpdate(
         <span style="display:inline-block;font-size:12px;font-weight:600;padding:3px 10px;border-radius:12px;background:#E6F1FB;color:#0C447C;">${label}</span>
       </div>
       ${message ? `<p style="font-size:14px;color:#333;line-height:1.6;">${message}</p>` : ''}
-      <a href="https://neotasteroadmap.vercel.app/voice/status" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#0D2818;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;border-radius:8px;">Check your feedback status</a>
+      <a href="${origin}/voice/status" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#0D2818;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;border-radius:8px;">Check your feedback status</a>
     `),
   }
 }
