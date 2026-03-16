@@ -179,7 +179,6 @@ export const feedbackSubmissions = pgTable('feedback_submissions', {
   research_opt_in: boolean('research_opt_in').notNull().default(false),
   embedding: text('embedding'),
   cluster_id: uuid('cluster_id'),
-  submission_origin: text('submission_origin').default('https://neotasteroadmap.vercel.app'),
   status_notified_at: timestamp('status_notified_at'),
   created_at: timestamp('created_at').defaultNow(),
   reviewed_at: timestamp('reviewed_at'),

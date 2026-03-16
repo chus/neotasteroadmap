@@ -84,7 +84,6 @@ export default function VoiceForm() {
         order_context: form.order_context || undefined,
         device: form.device || undefined,
         research_opt_in: form.research_opt_in,
-        submission_origin: window.location.origin,
       })
       if (result.success) {
         setSubmittedId(result.id)

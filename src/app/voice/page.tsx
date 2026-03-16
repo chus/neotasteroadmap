@@ -1,14 +1,9 @@
 import Link from 'next/link'
-import { headers } from 'next/headers'
 import VoiceForm from '@/components/voice/VoiceForm'
 
 export const dynamic = 'force-dynamic'
 
-export default async function VoicePage() {
-  const headersList = await headers()
-  const hostname = headersList.get('host') ?? ''
-  const isVoiceSubdomain = hostname === 'voice.neotasteroadmap.vercel.app' || hostname.startsWith('voice.')
-
+export default function VoicePage() {
   return (
     <main className="min-h-screen bg-neutral-50 py-12 px-4">
       <div className="max-w-lg mx-auto">
@@ -36,15 +31,9 @@ export default async function VoicePage() {
           <p className="text-[11px] text-neutral-400">
             Your feedback is reviewed by the NeoTaste product team. We read everything.
           </p>
-          {isVoiceSubdomain ? (
-            <p className="text-[11px] text-neutral-300">
-              NeoTaste &middot; Made by Agus
-            </p>
-          ) : (
-            <Link href="/how-it-works#voice-context" className="text-[11px] text-neutral-400 hover:text-neutral-600 transition-colors">
-              How Voice works &rarr;
-            </Link>
-          )}
+          <Link href="/how-it-works#voice-context" className="text-[11px] text-neutral-400 hover:text-neutral-600 transition-colors">
+            How Voice works &rarr;
+          </Link>
         </div>
       </div>
     </main>

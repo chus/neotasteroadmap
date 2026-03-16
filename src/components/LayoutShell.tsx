@@ -4,12 +4,11 @@ import { usePathname } from 'next/navigation'
 import Nav from './Nav'
 import Footer from './Footer'
 
-export default function LayoutShell({ children, unreviewedCount, isVoiceSubdomain }: { children: React.ReactNode; unreviewedCount?: number; isVoiceSubdomain?: boolean }) {
+export default function LayoutShell({ children, unreviewedCount }: { children: React.ReactNode; unreviewedCount?: number }) {
   const pathname = usePathname()
   const isPublic = pathname === '/public' || pathname === '/stakeholder'
 
-  // Voice subdomain: no nav, no footer — just the content
-  if (isVoiceSubdomain || isPublic) {
+  if (isPublic) {
     return <>{children}</>
   }
 

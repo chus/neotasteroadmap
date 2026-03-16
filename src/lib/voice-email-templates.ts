@@ -21,25 +21,24 @@ function layout(content: string): string {
 export function feedbackConfirmation(
   name: string,
   title: string,
-  researchOptIn: boolean,
-  origin: string = 'https://neotasteroadmap.vercel.app'
+  researchOptIn: boolean
 ): { subject: string; html: string } {
   const researchNote = researchOptIn
-    ? `<p style="font-size:14px;color:#333;line-height:1.6;">You opted in to participate in research — we may reach out if we'd like to learn more about your experience.</p>`
+    ? '<p style="font-size:14px;color:#333;line-height:1.6;">You opted in to participate in research — we may reach out if we\'d like to learn more about your experience.</p>'
     : ''
 
   return {
-    subject: `We received your feedback — ${title}`,
-    html: layout(`
-      <p style="font-size:14px;color:#333;line-height:1.6;">Hi ${name},</p>
-      <p style="font-size:14px;color:#333;line-height:1.6;">Thank you for sharing your feedback with us. Your input helps us make NeoTaste better.</p>
-      <div style="margin:16px 0;padding:12px 16px;background:#f9f9f9;border-radius:8px;">
-        <p style="margin:0;font-size:13px;color:#333;font-weight:600;">${title}</p>
-      </div>
-      <p style="font-size:14px;color:#333;line-height:1.6;">Our product team reviews every submission. If we have questions or updates, we'll let you know.</p>
-      ${researchNote}
-      <a href="${origin}/voice" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#0D2818;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;border-radius:8px;">View Voice portal</a>
-    `),
+    subject: "We received your feedback — " + title,
+    html: layout(
+      '<p style="font-size:14px;color:#333;line-height:1.6;">Hi ' + name + ',</p>' +
+      '<p style="font-size:14px;color:#333;line-height:1.6;">Thank you for sharing your feedback with us. Your input helps us make NeoTaste better.</p>' +
+      '<div style="margin:16px 0;padding:12px 16px;background:#f9f9f9;border-radius:8px;">' +
+        '<p style="margin:0;font-size:13px;color:#333;font-weight:600;">' + title + '</p>' +
+      '</div>' +
+      '<p style="font-size:14px;color:#333;line-height:1.6;">Our product team reviews every submission. If we have questions or updates, we\'ll let you know.</p>' +
+      researchNote +
+      '<a href="https://neotasteroadmap.vercel.app/voice" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#0D2818;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;border-radius:8px;">View Voice portal</a>'
+    ),
   }
 }
 
@@ -59,21 +58,24 @@ export function feedbackStatusUpdate(
   name: string,
   title: string,
   status: string,
-  origin: string = 'https://neotasteroadmap.vercel.app'
 ): { subject: string; html: string } {
   const label = STATUS_LABELS[status] ?? status
   const message = STATUS_MESSAGES[status] ?? ''
 
+  const messageHtml = message
+    ? '<p style="font-size:14px;color:#333;line-height:1.6;">' + message + '</p>'
+    : ''
+
   return {
-    subject: `Update on your NeoTaste feedback: ${title}`,
-    html: layout(`
-      <p style="font-size:14px;color:#333;line-height:1.6;">Hi ${name},</p>
-      <p style="font-size:14px;color:#333;line-height:1.6;">Your feedback <strong>${title}</strong> has been updated.</p>
-      <div style="margin:16px 0;">
-        <span style="display:inline-block;font-size:12px;font-weight:600;padding:3px 10px;border-radius:12px;background:#E6F1FB;color:#0C447C;">${label}</span>
-      </div>
-      ${message ? `<p style="font-size:14px;color:#333;line-height:1.6;">${message}</p>` : ''}
-      <a href="${origin}/voice/status" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#0D2818;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;border-radius:8px;">Check your feedback status</a>
-    `),
+    subject: "Update on your NeoTaste feedback: " + title,
+    html: layout(
+      '<p style="font-size:14px;color:#333;line-height:1.6;">Hi ' + name + ',</p>' +
+      '<p style="font-size:14px;color:#333;line-height:1.6;">Your feedback <strong>' + title + '</strong> has been updated.</p>' +
+      '<div style="margin:16px 0;">' +
+        '<span style="display:inline-block;font-size:12px;font-weight:600;padding:3px 10px;border-radius:12px;background:#E6F1FB;color:#0C447C;">' + label + '</span>' +
+      '</div>' +
+      messageHtml +
+      '<a href="https://neotasteroadmap.vercel.app/voice/status" style="display:inline-block;margin-top:16px;padding:10px 20px;background:#0D2818;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;border-radius:8px;">Check your feedback status</a>'
+    ),
   }
 }
