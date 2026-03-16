@@ -22,12 +22,14 @@ import ListView from './ListView'
 import StatsPanel from './StatsPanel'
 import Toast from './Toast'
 import DigestSubscribe from './DigestSubscribe'
+import ReleaseModal from './ReleaseModal'
 import {
   updateInitiativeColumn,
   updatePositions,
   updateInitiative,
   createInitiative,
   deleteInitiative,
+  releaseInitiative,
   getStrategicLevels as fetchLevels,
 } from '@/app/actions'
 import { COLUMNS } from '@/lib/constants'
@@ -62,6 +64,9 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
     }
     return 'board'
   })
+
+  // Release modal state
+  const [pendingRelease, setPendingRelease] = useState<{ initiativeId: string; previousColumn: Column } | null>(null)
 
   // Modal state
   const [addingToColumn, setAddingToColumn] = useState<Column | null>(null)
@@ -137,7 +142,20 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
     const overCol = findColumn(over.id as string) || COLUMNS.find((c) => c.id === over.id)?.id
     if (!overCol) return
 
-    const columnChanged = prevItemsRef.current.find((i) => i.id === active.id)?.column !== overCol
+    const previousColumn = prevItemsRef.current.find((i) => i.id === active.id)?.column
+    const columnChanged = previousColumn !== overCol
+
+    // Intercept drop into Released column — show release modal
+    if (overCol === 'released' && columnChanged) {
+      setPendingRelease({ initiativeId: active.id as string, previousColumn: previousColumn as Column })
+      // Keep the card visually in the released column while modal is open
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === active.id ? { ...item, column: 'released' as Column } : item
+        )
+      )
+      return
+    }
 
     setItems((prev) => {
       let updated = [...prev]
@@ -297,8 +315,9 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
     ...levels.map((l) => ({ key: l.id, label: l.name, color: l.color })),
   ]
 
-  const activeColumns = COLUMNS.filter((c) => c.id !== 'parked')
+  const activeColumns = COLUMNS.filter((c) => c.id !== 'parked' && c.id !== 'released')
   const parkedColumn = COLUMNS.find((c) => c.id === 'parked')!
+  const releasedColumn = COLUMNS.find((c) => c.id === 'released')!
 
   return (
     <div>
@@ -523,6 +542,35 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
               ))}
             </div>
 
+            {/* Released column */}
+            <div className="relative my-8">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-green-200" />
+              </div>
+              <div className="relative flex justify-center">
+                <span className="bg-white px-3 text-[10px] uppercase tracking-widest text-green-500">
+                  Released
+                </span>
+              </div>
+            </div>
+
+            <div className="max-w-sm">
+              <BoardColumn
+                columnId={releasedColumn.id}
+                label={releasedColumn.label}
+                sublabel={releasedColumn.sublabel}
+                initiatives={getColumnItems(releasedColumn.id)}
+                activeFilterLevelId={activeFilterLevelId}
+                searchQuery={searchQuery}
+                isOver={overId === 'released'}
+                onEdit={handleEditFromMenu}
+                onDelete={handleDeleteFromCard}
+                onAddClick={setAddingToColumn}
+                onCardClick={handleCardClick}
+                reactionMap={reactionMap}
+              />
+            </div>
+
             {/* Parked divider */}
             <div className="relative my-8">
               <div className="absolute inset-0 flex items-center">
@@ -606,6 +654,36 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
           strategicLevels={levels}
           onSave={handleAddSave}
           onClose={() => setAddingToColumn(null)}
+        />
+      )}
+
+      {/* Release modal */}
+      {pendingRelease && (
+        <ReleaseModal
+          initiativeTitle={items.find((i) => i.id === pendingRelease.initiativeId)?.title ?? ''}
+          onConfirm={async (releaseNote) => {
+            await releaseInitiative(pendingRelease.initiativeId, releaseNote)
+            setItems((prev) =>
+              prev.map((i) =>
+                i.id === pendingRelease.initiativeId
+                  ? { ...i, column: 'released' as Column }
+                  : i
+              )
+            )
+            setPendingRelease(null)
+            setToast('Initiative released')
+          }}
+          onCancel={() => {
+            // Return card to previous column
+            setItems((prev) =>
+              prev.map((i) =>
+                i.id === pendingRelease.initiativeId
+                  ? { ...i, column: pendingRelease.previousColumn }
+                  : i
+              )
+            )
+            setPendingRelease(null)
+          }}
         />
       )}
 

@@ -33,6 +33,8 @@ export const initiatives = pgTable('initiatives', {
   linear_state: text('linear_state'),
   linear_synced_at: timestamp('linear_synced_at'),
   linear_sync_enabled: boolean('linear_sync_enabled').notNull().default(false),
+  released_at: timestamp('released_at'),
+  release_note: text('release_note'),
   created_at: timestamp('created_at').defaultNow(),
 })
 

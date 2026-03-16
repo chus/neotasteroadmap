@@ -163,7 +163,7 @@ export default function LinearImportModal({ strategicLevels, onImported, onClose
                   value={column}
                   onChange={(e) => setColumn(e.target.value)}
                 >
-                  {COLUMNS.map((c) => (
+                  {COLUMNS.filter((c) => c.id !== 'released').map((c) => (
                     <option key={c.id} value={c.id}>{c.label}</option>
                   ))}
                 </select>

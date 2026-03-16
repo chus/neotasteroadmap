@@ -5,6 +5,7 @@ export const COLUMNS: { id: Column; label: string; sublabel: string }[] = [
   { id: 'next', label: 'Next', sublabel: 'Q2–Q3' },
   { id: 'later', label: 'Later', sublabel: 'Q3–Q4' },
   { id: 'parked', label: 'Parked', sublabel: 'Out of scope 2026' },
+  { id: 'released', label: 'Released', sublabel: '2026' },
 ]
 
 export const CRITERION_CONFIG: Record<Criterion, { label: string; color: string; bg: string; border: string; badge: string }> = {

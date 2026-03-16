@@ -1553,3 +1553,13 @@ export async function applyTriageSuggestions(requestId: string) {
     return null
   }
 }
+
+// ─── Released ───
+
+export async function releaseInitiative(id: string, releaseNote: string) {
+  await db.update(initiatives).set({
+    column: 'released',
+    released_at: new Date(),
+    release_note: releaseNote,
+  }).where(eq(initiatives.id, id))
+}

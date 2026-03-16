@@ -1,5 +1,5 @@
 export type Criterion = 'execution_ready' | 'foundation' | 'dependency' | 'research' | 'parked'
-export type Column = 'now' | 'next' | 'later' | 'parked'
+export type Column = 'now' | 'next' | 'later' | 'parked' | 'released'
 
 export interface StrategicLevel {
   id: string
