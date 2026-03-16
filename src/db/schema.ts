@@ -26,6 +26,8 @@ export const initiatives = pgTable('initiatives', {
   parent_initiative_id: uuid('parent_initiative_id'),
   parent_color: text('parent_color'),
   phase: text('phase'),
+  confidence_problem: integer('confidence_problem'),
+  confidence_solution: integer('confidence_solution'),
   linear_project_id: text('linear_project_id'),
   linear_url: text('linear_url'),
   linear_state: text('linear_state'),

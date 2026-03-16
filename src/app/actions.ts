@@ -33,6 +33,8 @@ export async function getInitiatives(): Promise<Initiative[]> {
       parent_initiative_id: initiatives.parent_initiative_id,
       parent_color: initiatives.parent_color,
       phase: initiatives.phase,
+      confidence_problem: initiatives.confidence_problem,
+      confidence_solution: initiatives.confidence_solution,
       linear_project_id: initiatives.linear_project_id,
       linear_url: initiatives.linear_url,
       linear_state: initiatives.linear_state,
@@ -75,6 +77,8 @@ export async function getInitiatives(): Promise<Initiative[]> {
     parent_color: r.parent_color ?? null,
     parent_title: r.parent_initiative_id ? parentMap.get(r.parent_initiative_id)?.title : undefined,
     phase: (r.phase as Phase) ?? null,
+    confidence_problem: r.confidence_problem ?? null,
+    confidence_solution: r.confidence_solution ?? null,
     linear_project_id: r.linear_project_id ?? null,
     linear_url: r.linear_url ?? null,
     linear_state: r.linear_state ?? null,
@@ -125,6 +129,8 @@ export async function updateInitiative(
     parent_initiative_id?: string | null
     parent_color?: string | null
     phase?: string | null
+    confidence_problem?: number | null
+    confidence_solution?: number | null
   }
 ) {
   await db.update(initiatives).set(fields).where(eq(initiatives.id, id))
@@ -181,6 +187,8 @@ export async function createInitiative(data: {
     parent_initiative_id: row.parent_initiative_id ?? null,
     parent_color: row.parent_color ?? null,
     phase: (row.phase as Phase) ?? null,
+    confidence_problem: row.confidence_problem ?? null,
+    confidence_solution: row.confidence_solution ?? null,
     linear_project_id: row.linear_project_id ?? null,
     linear_url: row.linear_url ?? null,
     linear_state: row.linear_state ?? null,
@@ -213,6 +221,8 @@ export async function getPublicInitiatives(): Promise<Initiative[]> {
       parent_initiative_id: initiatives.parent_initiative_id,
       parent_color: initiatives.parent_color,
       phase: initiatives.phase,
+      confidence_problem: initiatives.confidence_problem,
+      confidence_solution: initiatives.confidence_solution,
       linear_project_id: initiatives.linear_project_id,
       linear_url: initiatives.linear_url,
       linear_state: initiatives.linear_state,
@@ -253,6 +263,8 @@ export async function getPublicInitiatives(): Promise<Initiative[]> {
     parent_color: r.parent_color ?? null,
     parent_title: r.parent_initiative_id ? parentMap.get(r.parent_initiative_id) : undefined,
     phase: (r.phase as Phase) ?? null,
+    confidence_problem: r.confidence_problem ?? null,
+    confidence_solution: r.confidence_solution ?? null,
     linear_project_id: r.linear_project_id ?? null,
     linear_url: r.linear_url ?? null,
     linear_state: r.linear_state ?? null,
@@ -884,6 +896,8 @@ export async function importFromLinear(
     parent_initiative_id: null,
     parent_color: null,
     phase: null,
+    confidence_problem: null,
+    confidence_solution: null,
     linear_project_id: row.linear_project_id ?? null,
     linear_url: row.linear_url ?? null,
     linear_state: row.linear_state ?? null,

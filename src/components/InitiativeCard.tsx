@@ -195,6 +195,20 @@ export default function InitiativeCard({ initiative, dimmed, onEdit, onDelete, o
           )}
         </div>
 
+        {/* Confidence indicator */}
+        {initiative.confidence_problem != null && initiative.confidence_solution != null && (
+          <div className="flex items-center gap-1" title={`Problem confidence: ${initiative.confidence_problem}/5 · Solution confidence: ${initiative.confidence_solution}/5`}>
+            <span
+              className="w-1.5 h-1.5 rounded-sm"
+              style={{ backgroundColor: initiative.confidence_problem <= 2 ? '#E24B4A' : initiative.confidence_problem === 3 ? '#EF9F27' : '#1D9E75' }}
+            />
+            <span
+              className="w-1.5 h-1.5 rounded-sm"
+              style={{ backgroundColor: initiative.confidence_solution <= 2 ? '#E24B4A' : initiative.confidence_solution === 3 ? '#EF9F27' : '#1D9E75' }}
+            />
+          </div>
+        )}
+
         {/* Parent badge (for child initiatives) */}
         {initiative.parent_initiative_id && initiative.parent_title && (
           <div className="flex items-center gap-1.5">

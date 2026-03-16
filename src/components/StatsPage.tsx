@@ -260,6 +260,108 @@ export default function StatsPage({ initiatives, levels, requests }: Props) {
         })()}
       </section>
 
+      {/* Confidence matrix */}
+      <section className="mb-8">
+        <h2 className="text-[14px] font-semibold text-neutral-800 mb-1">Confidence matrix</h2>
+        <p className="text-[12px] text-neutral-400 mb-4">
+          Each initiative plotted by confidence in the problem (x-axis) vs confidence in the solution (y-axis). Items in the bottom-left need research before sequencing.
+        </p>
+        {(() => {
+          const rated = initiatives.filter((i) => i.confidence_problem != null && i.confidence_solution != null)
+          const unrated = initiatives.length - rated.length
+
+          const quadrantLabel = (x: 'low' | 'high', y: 'low' | 'high') => {
+            if (x === 'low' && y === 'high') return { label: 'Solution looking for a problem', bg: '#fef3c7' }
+            if (x === 'high' && y === 'high') return { label: 'Ready to build', bg: '#dcfce7' }
+            if (x === 'low' && y === 'low') return { label: 'Needs research', bg: '#fee2e2' }
+            return { label: 'Know the problem, need the approach', bg: '#dbeafe' }
+          }
+
+          function getQuadrant(p: number, s: number): { x: 'low' | 'high'; y: 'low' | 'high' } {
+            return { x: p <= 3 ? 'low' : 'high', y: s <= 3 ? 'low' : 'high' }
+          }
+
+          function dotPosition(val: number, isLow: boolean): number {
+            // Within a quadrant, position the dot based on actual value
+            if (isLow) {
+              if (val <= 1) return 20
+              if (val <= 2) return 45
+              return 70
+            } else {
+              if (val <= 4) return 30
+              return 65
+            }
+          }
+
+          const quadrants: { x: 'low' | 'high'; y: 'low' | 'high' }[] = [
+            { x: 'low', y: 'high' }, { x: 'high', y: 'high' },
+            { x: 'low', y: 'low' }, { x: 'high', y: 'low' },
+          ]
+
+          // Insight
+          const needsResearch = rated.filter((i) => i.confidence_problem! <= 3 && i.confidence_solution! <= 3).length
+          const readyToBuild = rated.filter((i) => i.confidence_problem! > 3 && i.confidence_solution! > 3).length
+          let insight = 'Confidence scores are spread across the matrix.'
+          if (rated.length > 0 && needsResearch / rated.length > 0.3) {
+            insight = 'More than a third of the roadmap has low confidence on both axes. Consider whether these items should be in Research rather than Now or Next.'
+          } else if (rated.length > 0 && readyToBuild / rated.length > 0.5) {
+            insight = 'Most initiatives are high-confidence. The main constraint is capacity, not discovery.'
+          }
+
+          return (
+            <div>
+              {rated.length === 0 ? (
+                <p className="text-[12px] text-neutral-400 italic">No initiatives have been rated yet. Add confidence scores in the initiative edit form.</p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-0 border border-neutral-200 rounded-lg overflow-hidden" style={{ maxWidth: 500 }}>
+                    {quadrants.map((q) => {
+                      const cfg = quadrantLabel(q.x, q.y)
+                      const dots = rated.filter((i) => {
+                        const quad = getQuadrant(i.confidence_problem!, i.confidence_solution!)
+                        return quad.x === q.x && quad.y === q.y
+                      })
+                      return (
+                        <div
+                          key={`${q.x}-${q.y}`}
+                          className="relative border border-neutral-100"
+                          style={{ backgroundColor: cfg.bg + '60', minHeight: 120, padding: 8 }}
+                        >
+                          <span className="text-[10px] text-neutral-500 font-medium">{cfg.label}</span>
+                          {dots.map((d) => (
+                            <div
+                              key={d.id}
+                              className="absolute w-2 h-2 rounded-full"
+                              style={{
+                                backgroundColor: d.strategic_level_color || '#999',
+                                left: `${dotPosition(d.confidence_problem!, q.x === 'low')}%`,
+                                top: `${100 - dotPosition(d.confidence_solution!, q.y === 'high')}%`,
+                              }}
+                              title={`${d.title} · Problem: ${d.confidence_problem}/5 · Solution: ${d.confidence_solution}/5`}
+                            />
+                          ))}
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div className="flex items-center justify-between mt-2" style={{ maxWidth: 500 }}>
+                    <span className="text-[10px] text-neutral-400">← Low problem confidence</span>
+                    <span className="text-[10px] text-neutral-400">High problem confidence →</span>
+                  </div>
+                  {unrated > 0 && (
+                    <p className="text-[11px] text-neutral-400 mt-2">{unrated} initiative{unrated !== 1 ? 's' : ''} not yet rated</p>
+                  )}
+                  <div className="flex items-start gap-2 text-[12px] text-neutral-500 mt-3">
+                    <span className="text-amber-500 mt-0.5 shrink-0">●</span>
+                    <span>{insight}</span>
+                  </div>
+                </>
+              )}
+            </div>
+          )
+        })()}
+      </section>
+
       {/* Monthly distribution */}
       <section className="mb-8">
         <h2 className="text-[14px] font-semibold text-neutral-800 mb-1">Target month distribution</h2>

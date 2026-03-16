@@ -32,6 +32,8 @@ export interface Initiative {
   parent_color: string | null
   parent_title?: string
   phase: Phase | null
+  confidence_problem: number | null
+  confidence_solution: number | null
   linear_project_id: string | null
   linear_url: string | null
   linear_state: string | null

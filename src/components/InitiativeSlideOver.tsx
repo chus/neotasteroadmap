@@ -34,6 +34,8 @@ interface Props {
     is_public?: boolean
     column?: Column
     phase?: string | null
+    confidence_problem?: number | null
+    confidence_solution?: number | null
   }) => Promise<void>
   onDelete: () => void
   onClose: () => void
@@ -52,6 +54,8 @@ function makeForm(initiative: Initiative) {
     is_public: initiative.is_public,
     column: initiative.column as string,
     phase: initiative.phase ?? '',
+    confidence_problem: initiative.confidence_problem,
+    confidence_solution: initiative.confidence_solution,
   }
 }
 
@@ -172,6 +176,8 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
         is_public: form.is_public,
         column: form.column as Column,
         ...(initiative.is_parent ? { phase: form.phase || null } : {}),
+        confidence_problem: form.confidence_problem,
+        confidence_solution: form.confidence_solution,
       })
       setSaving(false)
       setSaved(true)
@@ -354,6 +360,60 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                   }
                   return null
                 })()}
+              </div>
+
+              {/* Confidence */}
+              <div>
+                <div className={`${labelClass} mb-1`}>Confidence</div>
+                <p className="text-[11px] text-neutral-400 mb-3">
+                  Rate your confidence independently. Low problem confidence = we need more research. Low solution confidence = we need a spike.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] text-neutral-400">Problem confidence</label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <input
+                        type="range"
+                        min="1"
+                        max="5"
+                        step="1"
+                        value={form.confidence_problem ?? 3}
+                        onChange={(e) => setForm({ ...form, confidence_problem: parseInt(e.target.value) })}
+                        className="flex-1 accent-[#50E88A]"
+                      />
+                      <span className="text-[20px] font-semibold text-neutral-700 w-6 text-center">{form.confidence_problem ?? '—'}</span>
+                    </div>
+                    <p className="text-[10px] text-neutral-400 mt-0.5">
+                      {form.confidence_problem === null ? 'Not rated' :
+                       form.confidence_problem === 1 ? 'Total unknown' :
+                       form.confidence_problem === 2 ? 'Anecdotal evidence' :
+                       form.confidence_problem === 3 ? 'Validated pain' :
+                       form.confidence_problem === 4 ? 'Strong signal' : 'Proven problem'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-neutral-400">Solution confidence</label>
+                    <div className="flex items-center gap-2 mt-1">
+                      <input
+                        type="range"
+                        min="1"
+                        max="5"
+                        step="1"
+                        value={form.confidence_solution ?? 3}
+                        onChange={(e) => setForm({ ...form, confidence_solution: parseInt(e.target.value) })}
+                        className="flex-1 accent-[#50E88A]"
+                      />
+                      <span className="text-[20px] font-semibold text-neutral-700 w-6 text-center">{form.confidence_solution ?? '—'}</span>
+                    </div>
+                    <p className="text-[10px] text-neutral-400 mt-0.5">
+                      {form.confidence_solution === null ? 'Not rated' :
+                       form.confidence_solution === 1 ? 'No idea how' :
+                       form.confidence_solution === 2 ? 'Rough direction' :
+                       form.confidence_solution === 3 ? 'Viable approach' :
+                       form.confidence_solution === 4 ? 'Tested approach' : 'Proven solution'}
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {/* Dependency note */}

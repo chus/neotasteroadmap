@@ -209,6 +209,8 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
     is_public?: boolean
     column?: Column
     phase?: string | null
+    confidence_problem?: number | null
+    confidence_solution?: number | null
   }) {
     if (!selectedInitiative) return
     await updateInitiative(selectedInitiative.id, data)
