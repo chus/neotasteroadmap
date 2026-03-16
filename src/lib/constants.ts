@@ -1,4 +1,4 @@
-import type { Column, Criterion } from '@/types'
+import type { Column, Criterion, Phase } from '@/types'
 
 export const COLUMNS: { id: Column; label: string; sublabel: string }[] = [
   { id: 'now', label: 'Now', sublabel: 'Q1–Q2' },
@@ -44,3 +44,16 @@ export const MONTH_SHORT: Record<string, string> = {
   '2026-07': 'Jul', '2026-08': 'Aug', '2026-09': 'Sep',
   '2026-10': 'Oct', '2026-11': 'Nov', '2026-12': 'Dec',
 }
+
+export const PHASE_CONFIG: Record<Phase, { label: string; color: string }> = {
+  discovery:  { label: 'Discovery',  color: '#8B5CF6' },
+  definition: { label: 'Definition', color: '#3B82F6' },
+  build:      { label: 'Build',      color: '#F59E0B' },
+  launch:     { label: 'Launch',     color: '#10B981' },
+  done:       { label: 'Done',       color: '#6B7280' },
+}
+
+export const PARENT_COLORS = [
+  '#5E6AD2', '#E5484D', '#F76B15', '#12A594', '#E93D82',
+  '#0091FF', '#7C66DC', '#CD5EB0', '#30A46C', '#FFC53D',
+]

@@ -120,13 +120,17 @@ export default function InitiativeCard({ initiative, dimmed, onEdit, onDelete, o
       onClick={() => onClick(initiative)}
       {...attributes}
     >
-      {/* Drag handle — only absolute element besides dropdown */}
+      {/* Drag handle — full-height left edge grab zone */}
       <div
-        className="absolute -left-0.5 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing px-0.5 text-neutral-400 text-[12px] z-10"
+        className="absolute left-0 top-0 bottom-0 w-5 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing text-neutral-300 hover:text-neutral-400 z-10 rounded-l-lg"
         {...listeners}
         onClick={(e) => e.stopPropagation()}
       >
-        ⠿
+        <svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor">
+          <circle cx="2" cy="2" r="1.2" /><circle cx="6" cy="2" r="1.2" />
+          <circle cx="2" cy="7" r="1.2" /><circle cx="6" cy="7" r="1.2" />
+          <circle cx="2" cy="12" r="1.2" /><circle cx="6" cy="12" r="1.2" />
+        </svg>
       </div>
 
       {/* Card body with left criterion border */}
@@ -188,6 +192,19 @@ export default function InitiativeCard({ initiative, dimmed, onEdit, onDelete, o
             </span>
           )}
         </div>
+
+        {/* Parent badge (for child initiatives) */}
+        {initiative.parent_initiative_id && initiative.parent_title && (
+          <div className="flex items-center gap-1.5">
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ backgroundColor: initiative.parent_color ?? '#5E6AD2' }}
+            />
+            <span className="text-[10px] text-neutral-400 truncate">
+              {initiative.parent_title}
+            </span>
+          </div>
+        )}
 
         {/* Dep note row (conditional) */}
         {initiative.dep_note && (

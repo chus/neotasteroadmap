@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { CRITERION_CONFIG, COLUMNS, EFFORT_CONFIG, MONTHS_2026, MONTH_SHORT } from '@/lib/constants'
-import { getLinkedRequest, pushToLinear, pullFromLinear, unlinkFromLinear, getLinearSyncLog } from '@/app/actions'
-import type { Initiative, StrategicLevel, FeatureRequest, Criterion, Column, LinearSyncLogEntry } from '@/types'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import { CRITERION_CONFIG, COLUMNS, EFFORT_CONFIG, MONTHS_2026, MONTH_SHORT, PHASE_CONFIG } from '@/lib/constants'
+import { getLinkedRequest, pushToLinear, pullFromLinear, unlinkFromLinear, getLinearSyncLog, getChildInitiatives } from '@/app/actions'
+import type { Initiative, StrategicLevel, FeatureRequest, Criterion, Column, Phase, LinearSyncLogEntry } from '@/types'
 
 function timeAgo(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
@@ -31,13 +31,33 @@ interface Props {
     target_month?: string | null
     is_public?: boolean
     column?: Column
-  }) => void
+    phase?: string | null
+  }) => Promise<void>
   onDelete: () => void
   onClose: () => void
 }
 
+function makeForm(initiative: Initiative) {
+  return {
+    title: initiative.title,
+    subtitle: initiative.subtitle,
+    strategic_level_id: initiative.strategic_level_id ?? '',
+    criterion: initiative.criterion,
+    criterion_secondary: initiative.criterion_secondary ?? ('' as string),
+    dep_note: initiative.dep_note,
+    effort: initiative.effort ?? '',
+    target_month: initiative.target_month ?? '',
+    is_public: initiative.is_public,
+    column: initiative.column as string,
+    phase: initiative.phase ?? '',
+  }
+}
+
 export default function InitiativeSlideOver({ initiative, strategicLevels, onSave, onDelete, onClose }: Props) {
   const [editing, setEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
   const [linkedRequest, setLinkedRequest] = useState<FeatureRequest | null>(null)
   const [loadingLink, setLoadingLink] = useState(true)
   const backdropRef = useRef<HTMLDivElement>(null)
@@ -53,27 +73,36 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
   const [linearPullChanges, setLinearPullChanges] = useState<string | null>(null)
   const [syncLog, setSyncLog] = useState<LinearSyncLogEntry[]>([])
   const [syncLogExpanded, setSyncLogExpanded] = useState(false)
+  const [children, setChildren] = useState<Initiative[]>([])
+  const [childrenLoading, setChildrenLoading] = useState(false)
 
-  const [form, setForm] = useState({
-    title: initiative.title,
-    subtitle: initiative.subtitle,
-    strategic_level_id: initiative.strategic_level_id ?? '',
-    criterion: initiative.criterion,
-    criterion_secondary: initiative.criterion_secondary ?? ('' as string),
-    dep_note: initiative.dep_note,
-    effort: initiative.effort ?? '',
-    target_month: initiative.target_month ?? '',
-    is_public: initiative.is_public,
-    column: initiative.column as string,
-  })
+  const initialForm = useMemo(() => makeForm(initiative), [initiative])
+  const [form, setForm] = useState(initialForm)
+
+  // Reset form when initiative prop changes (e.g. after save updates the parent)
+  useEffect(() => {
+    setForm(makeForm(initiative))
+  }, [initiative])
+
+  // Check if form has unsaved changes
+  const isDirty = useMemo(() => {
+    return JSON.stringify(form) !== JSON.stringify(initialForm)
+  }, [form, initialForm])
+
+  const handleClose = useCallback(() => {
+    if (editing && isDirty) {
+      if (!window.confirm('You have unsaved changes. Discard them?')) return
+    }
+    onClose()
+  }, [editing, isDirty, onClose])
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') handleClose()
     }
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [onClose])
+  }, [handleClose])
 
   useEffect(() => {
     getLinkedRequest(initiative.id)
@@ -87,24 +116,53 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
     }
   }, [initiative.id, linearLinked])
 
+  useEffect(() => {
+    if (initiative.is_parent) {
+      setChildrenLoading(true)
+      getChildInitiatives(initiative.id)
+        .then(setChildren)
+        .finally(() => setChildrenLoading(false))
+    }
+  }, [initiative.id, initiative.is_parent])
+
   function handleBackdropClick(e: React.MouseEvent) {
-    if (e.target === backdropRef.current) onClose()
+    if (e.target === backdropRef.current) handleClose()
   }
 
-  function handleSubmit() {
+  function handleCancel() {
+    setForm(makeForm(initiative))
+    setSaveError(null)
+    setEditing(false)
+  }
+
+  async function handleSubmit() {
     if (!form.title.trim()) return
-    onSave({
-      title: form.title,
-      subtitle: form.subtitle,
-      strategic_level_id: form.strategic_level_id || null,
-      criterion: form.criterion,
-      criterion_secondary: form.criterion_secondary ? (form.criterion_secondary as Criterion) : null,
-      dep_note: form.dep_note,
-      effort: form.effort || null,
-      target_month: form.target_month || null,
-      is_public: form.is_public,
-      column: form.column as Column,
-    })
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await onSave({
+        title: form.title,
+        subtitle: form.subtitle,
+        strategic_level_id: form.strategic_level_id || null,
+        criterion: form.criterion,
+        criterion_secondary: form.criterion_secondary ? (form.criterion_secondary as Criterion) : null,
+        dep_note: form.dep_note,
+        effort: form.effort || null,
+        target_month: form.target_month || null,
+        is_public: form.is_public,
+        column: form.column as Column,
+        ...(initiative.is_parent ? { phase: form.phase || null } : {}),
+      })
+      setSaving(false)
+      setSaved(true)
+      setTimeout(() => {
+        setSaved(false)
+        setEditing(false)
+      }, 1200)
+    } catch {
+      setSaving(false)
+      setSaveError('Failed to save — please try again')
+    }
   }
 
   const config = CRITERION_CONFIG[initiative.criterion]
@@ -120,6 +178,10 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
     parked: 'This initiative is parked — it has been deprioritized or deferred for now.',
   }
 
+  const inputClass = 'mt-1 w-full text-[13px] border border-neutral-200 rounded-md px-2.5 py-2 outline-none focus:border-[#50E88A] bg-white'
+  const selectClass = 'mt-1 w-full text-[13px] border border-neutral-200 rounded-md px-2.5 py-2 outline-none focus:border-[#50E88A] bg-white appearance-none'
+  const labelClass = 'text-[10px] font-medium text-neutral-400 uppercase tracking-wide'
+
   return (
     <div
       ref={backdropRef}
@@ -133,15 +195,33 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
             {editing ? 'Edit initiative' : 'Initiative detail'}
           </h2>
           <div className="flex items-center gap-2">
-            {!editing && (
+            {editing ? (
+              <>
+                <button
+                  onClick={handleCancel}
+                  className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-neutral-300 hover:bg-neutral-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={!form.title.trim() || saving}
+                  className="text-[12px] font-medium px-4 py-1.5 rounded-lg text-white disabled:opacity-40 transition-colors"
+                  style={{ backgroundColor: saved ? '#10B981' : '#0D2818' }}
+                >
+                  {saving ? 'Saving...' : saved ? 'Saved' : 'Save'}
+                </button>
+              </>
+            ) : (
               <button
                 onClick={() => setEditing(true)}
-                className="text-[12px] font-medium px-3 py-1 rounded-lg border border-neutral-300 hover:bg-neutral-50"
+                className="text-[12px] font-semibold px-4 py-1.5 rounded-lg text-white"
+                style={{ backgroundColor: '#0D2818' }}
               >
                 Edit
               </button>
             )}
-            <button onClick={onClose} className="text-neutral-400 hover:text-neutral-600 text-[18px] leading-none">
+            <button onClick={handleClose} className="text-neutral-400 hover:text-neutral-600 text-[18px] leading-none ml-1">
               &times;
             </button>
           </div>
@@ -150,75 +230,82 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
         <div className="px-6 py-5">
           {editing ? (
             /* ─── Edit mode ─── */
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Title */}
               <div>
-                <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Title</label>
+                <label className={labelClass}>Title</label>
                 <input
-                  className="mt-1 w-full text-[14px] font-medium border border-neutral-300 rounded-lg px-3 py-2 outline-none focus:border-neutral-500"
+                  className={`${inputClass} !text-[18px] font-semibold`}
                   value={form.title}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                   autoFocus
                 />
               </div>
+
+              {/* Description */}
               <div>
-                <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Subtitle / description</label>
+                <label className={labelClass}>Description</label>
                 <textarea
-                  className="mt-1 w-full text-[13px] border border-neutral-300 rounded-lg px-3 py-2 outline-none focus:border-neutral-500 resize-none"
+                  className={`${inputClass} resize-y`}
                   rows={3}
                   value={form.subtitle}
                   onChange={(e) => setForm({ ...form, subtitle: e.target.value })}
+                  placeholder="Add a description..."
                 />
               </div>
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Strategic level</label>
-                  <select className="mt-1 w-full text-[12px] border border-neutral-300 rounded-lg px-3 py-2 outline-none" value={form.strategic_level_id} onChange={(e) => setForm({ ...form, strategic_level_id: e.target.value })}>
-                    <option value="">None</option>
-                    {strategicLevels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Column</label>
-                  <select className="mt-1 w-full text-[12px] border border-neutral-300 rounded-lg px-3 py-2 outline-none" value={form.column} onChange={(e) => setForm({ ...form, column: e.target.value })}>
-                    {COLUMNS.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Primary criterion</label>
-                  <select className="mt-1 w-full text-[12px] border border-neutral-300 rounded-lg px-3 py-2 outline-none" value={form.criterion} onChange={(e) => setForm({ ...form, criterion: e.target.value as Criterion })}>
-                    {(Object.entries(CRITERION_CONFIG) as [Criterion, { label: string }][]).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Secondary criterion</label>
-                  <select className="mt-1 w-full text-[12px] border border-neutral-300 rounded-lg px-3 py-2 outline-none" value={form.criterion_secondary} onChange={(e) => setForm({ ...form, criterion_secondary: e.target.value })}>
-                    <option value="">None</option>
-                    {(Object.entries(CRITERION_CONFIG) as [Criterion, { label: string }][]).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Effort estimate</label>
-                  <select className="mt-1 w-full text-[12px] border border-neutral-300 rounded-lg px-3 py-2 outline-none" value={form.effort} onChange={(e) => setForm({ ...form, effort: e.target.value })}>
-                    <option value="">None</option>
-                    {Object.entries(EFFORT_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                  </select>
-                  <p className="text-[10px] text-neutral-400 mt-0.5">XS = hours, S = days, M = 1–2 weeks, L = 3–4 weeks, XL = 4+ weeks.</p>
-                </div>
-                <div className="flex-1">
-                  <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Dependency note</label>
-                  <input className="mt-1 w-full text-[12px] border border-neutral-300 rounded-lg px-3 py-2 outline-none focus:border-neutral-500" value={form.dep_note} onChange={(e) => setForm({ ...form, dep_note: e.target.value })} />
-                </div>
-              </div>
+
+              {/* Sequencing */}
               <div>
-                <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Target month</label>
-                <select className="mt-1 w-full text-[12px] border border-neutral-300 rounded-lg px-3 py-2 outline-none" value={form.target_month} onChange={(e) => setForm({ ...form, target_month: e.target.value })}>
-                  <option value="">None</option>
-                  {MONTHS_2026.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-                </select>
+                <div className={`${labelClass} mb-2`}>Sequencing</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-neutral-400">Strategic level</label>
+                    <select className={selectClass} value={form.strategic_level_id} onChange={(e) => setForm({ ...form, strategic_level_id: e.target.value })}>
+                      <option value="">None</option>
+                      {strategicLevels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-neutral-400">Column</label>
+                    <select className={selectClass} value={form.column} onChange={(e) => setForm({ ...form, column: e.target.value })}>
+                      {COLUMNS.map((c) => <option key={c.id} value={c.id}>{c.label} ({c.sublabel})</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-neutral-400">Primary criterion</label>
+                    <select className={selectClass} value={form.criterion} onChange={(e) => setForm({ ...form, criterion: e.target.value as Criterion })}>
+                      {(Object.entries(CRITERION_CONFIG) as [Criterion, { label: string }][]).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-neutral-400">Secondary criterion</label>
+                    <select className={selectClass} value={form.criterion_secondary} onChange={(e) => setForm({ ...form, criterion_secondary: e.target.value })}>
+                      <option value="">None</option>
+                      {(Object.entries(CRITERION_CONFIG) as [Criterion, { label: string }][]).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Timing & Effort */}
+              <div>
+                <div className={`${labelClass} mb-2`}>Timing & effort</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-neutral-400">Effort estimate</label>
+                    <select className={selectClass} value={form.effort} onChange={(e) => setForm({ ...form, effort: e.target.value })}>
+                      <option value="">Not set</option>
+                      {Object.entries(EFFORT_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-neutral-400">Target month</label>
+                    <select className={selectClass} value={form.target_month} onChange={(e) => setForm({ ...form, target_month: e.target.value })}>
+                      <option value="">Not set</option>
+                      {MONTHS_2026.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select>
+                  </div>
+                </div>
                 {(() => {
                   if (!form.target_month) return null
                   const month = parseInt(form.target_month.split('-')[1])
@@ -228,7 +315,7 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                   }
                   const allowed = colQuarters[form.column] ?? []
                   if (form.column === 'parked') {
-                    return <p className="text-[10px] text-amber-600 mt-1">Parked items typically don't have a target month.</p>
+                    return <p className="text-[10px] text-amber-600 mt-1">Parked items typically don&apos;t have a target month.</p>
                   }
                   if (allowed.length > 0 && !allowed.includes(month)) {
                     const colLabel = COLUMNS.find((c) => c.id === form.column)?.label ?? form.column
@@ -237,25 +324,53 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                   return null
                 })()}
               </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Visible on public roadmap</label>
-                  <p className="text-[10px] text-neutral-400 mt-0.5">Public items are visible to anyone with the link at /public.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setForm({ ...form, is_public: !form.is_public })}
-                  className={`relative w-9 h-5 rounded-full transition-colors ${form.is_public ? 'bg-green-500' : 'bg-neutral-300'}`}
-                >
-                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${form.is_public ? 'translate-x-4' : ''}`} />
-                </button>
+
+              {/* Dependency note */}
+              <div>
+                <label className={labelClass}>Dependency note</label>
+                <input
+                  className={inputClass}
+                  value={form.dep_note}
+                  onChange={(e) => setForm({ ...form, dep_note: e.target.value })}
+                  placeholder="e.g. needs pricing infra spike first"
+                />
               </div>
-              <div className="flex items-center justify-between pt-3 border-t border-neutral-100">
-                <button onClick={onDelete} className="text-[12px] text-red-500 hover:text-red-700">Delete initiative</button>
-                <div className="flex gap-2">
-                  <button onClick={() => setEditing(false)} className="text-[12px] font-medium px-4 py-1.5 rounded-lg border border-neutral-300 hover:bg-neutral-50">Cancel</button>
-                  <button onClick={handleSubmit} disabled={!form.title.trim()} className="text-[12px] font-medium px-4 py-1.5 rounded-lg bg-neutral-900 text-white hover:bg-neutral-700 disabled:opacity-40">Save</button>
+
+              {/* Options */}
+              <div>
+                <div className={`${labelClass} mb-2`}>Options</div>
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.is_public}
+                    onChange={(e) => setForm({ ...form, is_public: e.target.checked })}
+                    className="w-4 h-4 rounded border-neutral-300 accent-[#50E88A]"
+                  />
+                  <span className="text-[13px] text-neutral-700">Visible on public roadmap</span>
+                </label>
+              </div>
+
+              {/* Phase (parent only) */}
+              {initiative.is_parent && (
+                <div>
+                  <label className={labelClass}>Phase</label>
+                  <select className={selectClass} value={form.phase} onChange={(e) => setForm({ ...form, phase: e.target.value })}>
+                    <option value="">None</option>
+                    {(Object.entries(PHASE_CONFIG) as [Phase, { label: string }][]).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  </select>
                 </div>
+              )}
+
+              {/* Save error */}
+              {saveError && (
+                <p className="text-[12px] text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>
+              )}
+
+              {/* Danger zone */}
+              <div className="pt-3 border-t border-neutral-100">
+                <button onClick={onDelete} className="text-[12px] text-red-500 hover:text-red-700 hover:underline">
+                  Delete this initiative
+                </button>
               </div>
             </div>
           ) : (
@@ -284,6 +399,101 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                   </span>
                 </div>
               </section>
+
+              {/* Phase stepper (parent only) */}
+              {initiative.is_parent && initiative.phase && (
+                <>
+                  <hr className="my-5" style={{ borderColor: '#f0f0f0' }} />
+                  <section>
+                    <div className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-3">Phase</div>
+                    <div className="flex items-center gap-0">
+                      {(Object.entries(PHASE_CONFIG) as [Phase, { label: string; color: string }][]).map(([key, cfg], idx) => {
+                        const isActive = key === initiative.phase
+                        const phases = Object.keys(PHASE_CONFIG)
+                        const currentIdx = phases.indexOf(initiative.phase!)
+                        const isPast = idx < currentIdx
+                        return (
+                          <div key={key} className="flex items-center">
+                            {idx > 0 && (
+                              <div className={`w-6 h-0.5 ${isPast || isActive ? 'bg-neutral-400' : 'bg-neutral-200'}`} />
+                            )}
+                            <div
+                              className={`text-[10px] font-medium px-2 py-1 rounded-full border ${
+                                isActive
+                                  ? 'text-white'
+                                  : isPast
+                                  ? 'text-neutral-500 border-neutral-300 bg-neutral-100'
+                                  : 'text-neutral-300 border-neutral-200'
+                              }`}
+                              style={isActive ? { backgroundColor: cfg.color, borderColor: cfg.color } : undefined}
+                            >
+                              {cfg.label}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </section>
+                </>
+              )}
+
+              {/* Children section (parent only) */}
+              {initiative.is_parent && (
+                <>
+                  <hr className="my-5" style={{ borderColor: '#f0f0f0' }} />
+                  <section>
+                    <div className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-3">
+                      Children ({children.length})
+                    </div>
+                    {childrenLoading ? (
+                      <p className="text-[12px] text-neutral-400">Loading...</p>
+                    ) : children.length === 0 ? (
+                      <p className="text-[12px] text-neutral-400 italic">No child initiatives linked yet.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {children.map((child) => {
+                          const childCol = COLUMNS.find((c) => c.id === child.column)?.label ?? child.column
+                          return (
+                            <div
+                              key={child.id}
+                              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-neutral-200 hover:bg-neutral-50"
+                            >
+                              <span
+                                className="w-2 h-2 rounded-full shrink-0"
+                                style={{ backgroundColor: initiative.parent_color ?? '#5E6AD2' }}
+                              />
+                              <span className="text-[12px] text-neutral-700 flex-1 truncate">{child.title}</span>
+                              <span className="text-[10px] text-neutral-400 shrink-0">{childCol}</span>
+                              {child.effort && EFFORT_CONFIG[child.effort] && (
+                                <span
+                                  className="text-[9px] font-semibold px-1 py-0.5 rounded shrink-0"
+                                  style={{
+                                    backgroundColor: EFFORT_CONFIG[child.effort].color + '1a',
+                                    color: EFFORT_CONFIG[child.effort].color,
+                                  }}
+                                >
+                                  {EFFORT_CONFIG[child.effort].label}
+                                </span>
+                              )}
+                            </div>
+                          )
+                        })}
+                        {/* Progress summary */}
+                        <div className="mt-3 pt-2 border-t border-neutral-100">
+                          <div className="flex items-center gap-3 text-[11px] text-neutral-500">
+                            {COLUMNS.filter((c) => c.id !== 'parked').map((col) => {
+                              const count = children.filter((c) => c.column === col.id).length
+                              return count > 0 ? (
+                                <span key={col.id}>{col.label}: {count}</span>
+                              ) : null
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                </>
+              )}
 
               <hr className="my-5" style={{ borderColor: '#f0f0f0' }} />
 
@@ -322,7 +532,7 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
               <section>
                 <div className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-2">Linked request</div>
                 {loadingLink ? (
-                  <p className="text-[12px] text-neutral-400">Loading…</p>
+                  <p className="text-[12px] text-neutral-400">Loading...</p>
                 ) : linkedRequest ? (
                   <a href="/requests" className="inline-flex items-center gap-1.5 text-[12px] text-blue-600 hover:underline">
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 font-medium">{linkedRequest.vote_count} votes</span>
@@ -371,6 +581,8 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                       <dd className="text-neutral-600">{secondaryConfig.label}</dd>
                     </>
                   )}
+                  <dt className="text-neutral-400">Public</dt>
+                  <dd className="text-neutral-600">{initiative.is_public ? 'Yes' : 'No'}</dd>
                 </dl>
               </section>
 
@@ -405,7 +617,7 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                         disabled={linearPushing}
                         className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
                       >
-                        {linearPushing ? 'Pushing…' : 'Push to Linear'}
+                        {linearPushing ? 'Pushing...' : 'Push to Linear'}
                       </button>
                     </div>
                     {linearError && (
@@ -414,7 +626,6 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {/* Project link */}
                     <div className="flex items-center justify-between text-[12px]">
                       <span className="text-neutral-400">Project</span>
                       {linearUrl ? (
@@ -429,7 +640,6 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                       )}
                     </div>
 
-                    {/* Linear state */}
                     {linearState && (
                       <div className="flex items-center justify-between text-[12px]">
                         <span className="text-neutral-400">Linear state</span>
@@ -439,7 +649,6 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                       </div>
                     )}
 
-                    {/* Last synced */}
                     <div className="flex items-center justify-between text-[12px]">
                       <span className="text-neutral-400">Last synced</span>
                       <span className="text-neutral-600" title={linearSyncedAt ? new Date(linearSyncedAt).toLocaleString() : ''}>
@@ -447,7 +656,6 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                       </span>
                     </div>
 
-                    {/* Actions */}
                     <div className="flex items-center gap-2 pt-1">
                       <button
                         onClick={async () => {
@@ -465,7 +673,7 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                         disabled={linearPushing}
                         className="text-[11px] font-medium px-2.5 py-1 rounded-lg border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
                       >
-                        {linearPushing ? 'Pushing…' : 'Push changes'}
+                        {linearPushing ? 'Pushing...' : 'Push changes'}
                       </button>
                       <button
                         onClick={async () => {
@@ -485,7 +693,7 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                         disabled={linearPulling}
                         className="text-[11px] font-medium px-2.5 py-1 rounded-lg border border-neutral-300 hover:bg-neutral-50 disabled:opacity-40"
                       >
-                        {linearPulling ? 'Pulling…' : 'Pull from Linear'}
+                        {linearPulling ? 'Pulling...' : 'Pull from Linear'}
                       </button>
                       <button
                         onClick={async () => {
@@ -510,7 +718,6 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                       <p className="text-[11px] text-red-500">{linearError}</p>
                     )}
 
-                    {/* Sync log */}
                     {syncLog.length > 0 && (
                       <div className="pt-2">
                         <div className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-1.5">Sync history</div>

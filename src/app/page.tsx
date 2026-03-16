@@ -1,12 +1,14 @@
-import { getInitiatives, getStrategicLevels } from './actions'
+import { getInitiatives, getStrategicLevels, getKeyAccounts, getAllKeyAccountLinks } from './actions'
 import Board from '@/components/Board'
 
 export const dynamic = 'force-dynamic'
 
 export default async function Home() {
-  const [initiatives, levels] = await Promise.all([
+  const [initiatives, levels, keyAccounts, keyAccountLinks] = await Promise.all([
     getInitiatives(),
     getStrategicLevels(),
+    getKeyAccounts(),
+    getAllKeyAccountLinks(),
   ])
 
   return (
@@ -14,7 +16,12 @@ export default async function Home() {
       <h1 className="text-[20px] font-semibold text-neutral-800 mb-6">
         2026 product roadmap
       </h1>
-      <Board initialData={initiatives} initialLevels={levels} />
+      <Board
+        initialData={initiatives}
+        initialLevels={levels}
+        initialKeyAccounts={keyAccounts}
+        initialKeyAccountLinks={keyAccountLinks}
+      />
     </main>
   )
 }

@@ -30,18 +30,23 @@ import {
   getStrategicLevels as fetchLevels,
 } from '@/app/actions'
 import { COLUMNS } from '@/lib/constants'
-import type { Initiative, StrategicLevel, Column, Criterion } from '@/types'
+import type { Initiative, StrategicLevel, Column, Criterion, KeyAccount, KeyAccountInitiative } from '@/types'
+import { PHASE_CONFIG } from '@/lib/constants'
 
 type ViewMode = 'board' | 'swimlane' | 'list'
 
 interface Props {
   initialData: Initiative[]
   initialLevels: StrategicLevel[]
+  initialKeyAccounts?: KeyAccount[]
+  initialKeyAccountLinks?: KeyAccountInitiative[]
 }
 
-export default function Board({ initialData, initialLevels }: Props) {
+export default function Board({ initialData, initialLevels, initialKeyAccounts = [], initialKeyAccountLinks = [] }: Props) {
   const [items, setItems] = useState<Initiative[]>(initialData)
   const [levels, setLevels] = useState<StrategicLevel[]>(initialLevels)
+  const [keyAccounts] = useState<KeyAccount[]>(initialKeyAccounts)
+  const [keyAccountLinks] = useState<KeyAccountInitiative[]>(initialKeyAccountLinks)
   const [activeFilterLevelId, setActiveFilterLevelId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -200,24 +205,23 @@ export default function Board({ initialData, initialLevels }: Props) {
     target_month?: string | null
     is_public?: boolean
     column?: Column
+    phase?: string | null
   }) {
     if (!selectedInitiative) return
-    try {
-      await updateInitiative(selectedInitiative.id, data)
-      const level = levels.find((l) => l.id === data.strategic_level_id)
-      setItems((prev) =>
-        prev.map((i) => i.id === selectedInitiative.id ? {
-          ...i,
-          ...data,
-          column: data.column ?? i.column,
-          strategic_level_name: level?.name ?? '',
-          strategic_level_color: level?.color ?? '#999',
-        } : i)
-      )
-      setSelectedInitiative(null)
-    } catch {
-      setToast('Failed to save — changes reverted')
+    await updateInitiative(selectedInitiative.id, data)
+    const level = levels.find((l) => l.id === data.strategic_level_id)
+    const updatedInit: Initiative = {
+      ...selectedInitiative,
+      ...data,
+      column: data.column ?? selectedInitiative.column,
+      phase: (data.phase as Initiative['phase']) ?? selectedInitiative.phase,
+      strategic_level_name: level?.name ?? '',
+      strategic_level_color: level?.color ?? '#999',
     }
+    setItems((prev) =>
+      prev.map((i) => i.id === selectedInitiative.id ? updatedInit : i)
+    )
+    setSelectedInitiative(updatedInit)
   }
 
   async function handleSlideOverDelete() {
@@ -242,6 +246,9 @@ export default function Board({ initialData, initialLevels }: Props) {
     effort?: string | null
     target_month?: string | null
     column?: Column
+    is_parent?: boolean
+    parent_color?: string | null
+    phase?: string | null
   }) {
     const col = data.column ?? addingToColumn ?? 'now'
     const colItems = items.filter((i) => i.column === col)
@@ -257,6 +264,9 @@ export default function Board({ initialData, initialLevels }: Props) {
         dep_note: data.dep_note,
         effort: data.effort,
         target_month: data.target_month,
+        is_parent: data.is_parent,
+        parent_color: data.parent_color,
+        phase: data.phase,
       })
       setItems((prev) => [...prev, newInit])
     } catch {
@@ -377,6 +387,110 @@ export default function Board({ initialData, initialLevels }: Props) {
 
       {viewMode === 'board' && (
         <>
+          {/* Zone 1 — Key account strips */}
+          {keyAccounts.length > 0 && (
+            <div className="mb-6 space-y-2">
+              <div className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-2">Key account dependencies</div>
+              {keyAccounts.map((account) => {
+                const linkedIds = keyAccountLinks
+                  .filter((l) => l.key_account_id === account.id)
+                  .map((l) => l.initiative_id)
+                const linkedInitiatives = items.filter((i) => linkedIds.includes(i.id))
+                if (linkedInitiatives.length === 0) return null
+                return (
+                  <div
+                    key={account.id}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg border border-neutral-200 bg-neutral-50"
+                  >
+                    <div className="flex items-center gap-2 shrink-0 min-w-[140px]">
+                      <span className="w-2 h-2 rounded-full bg-amber-400" />
+                      <span className="text-[12px] font-medium text-neutral-700 truncate">{account.name}</span>
+                      {account.company && (
+                        <span className="text-[10px] text-neutral-400">{account.company}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {linkedInitiatives.map((init) => (
+                        <button
+                          key={init.id}
+                          onClick={() => handleCardClick(init)}
+                          className="text-[11px] font-medium px-2 py-0.5 rounded bg-white border border-neutral-200 text-neutral-600 hover:border-neutral-400 truncate max-w-[200px]"
+                        >
+                          {init.title}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Zone 2 — Parent initiative banners */}
+          {items.filter((i) => i.is_parent).length > 0 && (
+            <div className="mb-6 space-y-2">
+              <div className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-2">Strategic bets</div>
+              {items.filter((i) => i.is_parent).map((parent) => {
+                const children = items.filter((i) => i.parent_initiative_id === parent.id)
+                const phaseConfig = parent.phase ? PHASE_CONFIG[parent.phase] : null
+                return (
+                  <div
+                    key={parent.id}
+                    className="flex items-center gap-4 px-4 py-3 rounded-lg cursor-pointer hover:shadow-sm transition-shadow"
+                    style={{
+                      border: `1px solid ${parent.parent_color ?? '#5E6AD2'}30`,
+                      borderLeft: `4px solid ${parent.parent_color ?? '#5E6AD2'}`,
+                      background: `${parent.parent_color ?? '#5E6AD2'}08`,
+                    }}
+                    onClick={() => handleCardClick(parent)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px] font-semibold text-neutral-800">{parent.title}</span>
+                        {phaseConfig && (
+                          <span
+                            className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full"
+                            style={{ backgroundColor: phaseConfig.color + '1a', color: phaseConfig.color }}
+                          >
+                            {phaseConfig.label}
+                          </span>
+                        )}
+                      </div>
+                      {parent.subtitle && (
+                        <p className="text-[11px] text-neutral-500 mt-0.5 truncate">{parent.subtitle}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-[11px] text-neutral-400">
+                        {children.length} child{children.length !== 1 ? 'ren' : ''}
+                      </span>
+                      {children.length > 0 && (
+                        <div className="flex -space-x-1">
+                          {children.slice(0, 4).map((c) => (
+                            <div
+                              key={c.id}
+                              className="w-5 h-5 rounded-full border-2 border-white flex items-center justify-center text-[8px] font-bold text-white"
+                              style={{ backgroundColor: parent.parent_color ?? '#5E6AD2' }}
+                              title={c.title}
+                            >
+                              {c.title.charAt(0).toUpperCase()}
+                            </div>
+                          ))}
+                          {children.length > 4 && (
+                            <div className="w-5 h-5 rounded-full border-2 border-white bg-neutral-200 flex items-center justify-center text-[8px] font-medium text-neutral-500">
+                              +{children.length - 4}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Zone 3 — Regular board */}
           <DndContext
             sensors={sensors}
             collisionDetection={closestCorners}

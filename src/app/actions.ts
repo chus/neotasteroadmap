@@ -1,15 +1,19 @@
 'use server'
 
 import { db } from '@/db'
-import { initiatives, strategicLevels, featureRequests, votes, requestComments, activityLog, linearSyncLog } from '@/db/schema'
+import { initiatives, strategicLevels, featureRequests, votes, requestComments, activityLog, linearSyncLog, keyAccounts, keyAccountInitiatives } from '@/db/schema'
 import { eq, asc, desc, sql, isNull, ilike, or } from 'drizzle-orm'
 import { createHash } from 'crypto'
 import { headers } from 'next/headers'
-import type { Initiative, StrategicLevel, Column, FeatureRequest, RequestStatus, Criterion, RequestComment, LinearSyncLogEntry } from '@/types'
+import type { Initiative, StrategicLevel, Column, FeatureRequest, RequestStatus, Criterion, Phase, RequestComment, LinearSyncLogEntry, KeyAccount, KeyAccountInitiative } from '@/types'
 
 // ─── Initiatives ───
 
 export async function getInitiatives(): Promise<Initiative[]> {
+  const parentAlias = db.$with('parent_alias').as(
+    db.select({ id: initiatives.id, title: initiatives.title, parent_color: initiatives.parent_color }).from(initiatives).where(eq(initiatives.is_parent, true))
+  )
+
   const rows = await db
     .select({
       id: initiatives.id,
@@ -24,6 +28,10 @@ export async function getInitiatives(): Promise<Initiative[]> {
       effort: initiatives.effort,
       target_month: initiatives.target_month,
       is_public: initiatives.is_public,
+      is_parent: initiatives.is_parent,
+      parent_initiative_id: initiatives.parent_initiative_id,
+      parent_color: initiatives.parent_color,
+      phase: initiatives.phase,
       linear_project_id: initiatives.linear_project_id,
       linear_url: initiatives.linear_url,
       linear_state: initiatives.linear_state,
@@ -36,6 +44,15 @@ export async function getInitiatives(): Promise<Initiative[]> {
     .from(initiatives)
     .leftJoin(strategicLevels, eq(initiatives.strategic_level_id, strategicLevels.id))
     .orderBy(asc(initiatives.column), asc(initiatives.position))
+
+  // Build parent title map
+  const parentIds = [...new Set(rows.filter((r) => r.parent_initiative_id).map((r) => r.parent_initiative_id!))]
+  const parentMap = new Map<string, { title: string; color: string | null }>()
+  for (const r of rows) {
+    if (parentIds.includes(r.id)) {
+      parentMap.set(r.id, { title: r.title, color: r.parent_color })
+    }
+  }
 
   return rows.map((r) => ({
     id: r.id,
@@ -52,6 +69,11 @@ export async function getInitiatives(): Promise<Initiative[]> {
     effort: r.effort ?? null,
     target_month: r.target_month ?? null,
     is_public: r.is_public ?? false,
+    is_parent: r.is_parent ?? false,
+    parent_initiative_id: r.parent_initiative_id ?? null,
+    parent_color: r.parent_color ?? null,
+    parent_title: r.parent_initiative_id ? parentMap.get(r.parent_initiative_id)?.title : undefined,
+    phase: (r.phase as Phase) ?? null,
     linear_project_id: r.linear_project_id ?? null,
     linear_url: r.linear_url ?? null,
     linear_state: r.linear_state ?? null,
@@ -98,6 +120,10 @@ export async function updateInitiative(
     effort?: string | null
     target_month?: string | null
     is_public?: boolean
+    is_parent?: boolean
+    parent_initiative_id?: string | null
+    parent_color?: string | null
+    phase?: string | null
   }
 ) {
   await db.update(initiatives).set(fields).where(eq(initiatives.id, id))
@@ -114,6 +140,10 @@ export async function createInitiative(data: {
   dep_note?: string
   effort?: string | null
   target_month?: string | null
+  is_parent?: boolean
+  parent_initiative_id?: string | null
+  parent_color?: string | null
+  phase?: string | null
 }): Promise<Initiative> {
   const [row] = await db.insert(initiatives).values(data).returning()
 
@@ -146,6 +176,10 @@ export async function createInitiative(data: {
     effort: row.effort ?? null,
     target_month: row.target_month ?? null,
     is_public: row.is_public ?? false,
+    is_parent: row.is_parent ?? false,
+    parent_initiative_id: row.parent_initiative_id ?? null,
+    parent_color: row.parent_color ?? null,
+    phase: (row.phase as Phase) ?? null,
     linear_project_id: row.linear_project_id ?? null,
     linear_url: row.linear_url ?? null,
     linear_state: row.linear_state ?? null,
@@ -174,6 +208,10 @@ export async function getPublicInitiatives(): Promise<Initiative[]> {
       effort: initiatives.effort,
       target_month: initiatives.target_month,
       is_public: initiatives.is_public,
+      is_parent: initiatives.is_parent,
+      parent_initiative_id: initiatives.parent_initiative_id,
+      parent_color: initiatives.parent_color,
+      phase: initiatives.phase,
       linear_project_id: initiatives.linear_project_id,
       linear_url: initiatives.linear_url,
       linear_state: initiatives.linear_state,
@@ -187,6 +225,12 @@ export async function getPublicInitiatives(): Promise<Initiative[]> {
     .leftJoin(strategicLevels, eq(initiatives.strategic_level_id, strategicLevels.id))
     .where(eq(initiatives.is_public, true))
     .orderBy(asc(initiatives.column), asc(initiatives.position))
+
+  const parentIds = [...new Set(rows.filter((r) => r.parent_initiative_id).map((r) => r.parent_initiative_id!))]
+  const parentMap = new Map<string, string>()
+  for (const r of rows) {
+    if (parentIds.includes(r.id)) parentMap.set(r.id, r.title)
+  }
 
   return rows.map((r) => ({
     id: r.id,
@@ -203,6 +247,11 @@ export async function getPublicInitiatives(): Promise<Initiative[]> {
     effort: r.effort ?? null,
     target_month: r.target_month ?? null,
     is_public: true,
+    is_parent: r.is_parent ?? false,
+    parent_initiative_id: r.parent_initiative_id ?? null,
+    parent_color: r.parent_color ?? null,
+    parent_title: r.parent_initiative_id ? parentMap.get(r.parent_initiative_id) : undefined,
+    phase: (r.phase as Phase) ?? null,
     linear_project_id: r.linear_project_id ?? null,
     linear_url: r.linear_url ?? null,
     linear_state: r.linear_state ?? null,
@@ -830,6 +879,10 @@ export async function importFromLinear(
     effort: row.effort ?? null,
     target_month: row.target_month ?? null,
     is_public: row.is_public ?? false,
+    is_parent: false,
+    parent_initiative_id: null,
+    parent_color: null,
+    phase: null,
     linear_project_id: row.linear_project_id ?? null,
     linear_url: row.linear_url ?? null,
     linear_state: row.linear_state ?? null,
@@ -908,4 +961,139 @@ export async function testLinearConnection(): Promise<{ success: boolean; teamNa
     const message = err instanceof Error ? err.message : String(err)
     return { success: false, error: message }
   }
+}
+
+// ─── Parent Initiatives ───
+
+export async function getParentInitiatives(): Promise<Initiative[]> {
+  const all = await getInitiatives()
+  return all.filter((i) => i.is_parent)
+}
+
+export async function getChildInitiatives(parentId: string): Promise<Initiative[]> {
+  const all = await getInitiatives()
+  return all.filter((i) => i.parent_initiative_id === parentId)
+}
+
+export async function setParent(childId: string, parentId: string | null) {
+  await db.update(initiatives).set({ parent_initiative_id: parentId }).where(eq(initiatives.id, childId))
+}
+
+// ─── Key Accounts ───
+
+export async function getKeyAccounts(): Promise<KeyAccount[]> {
+  const rows = await db
+    .select()
+    .from(keyAccounts)
+    .orderBy(asc(keyAccounts.position))
+
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    company: r.company ?? '',
+    logo_url: r.logo_url ?? '',
+    position: r.position ?? 0,
+    created_at: r.created_at ?? new Date(),
+  }))
+}
+
+export async function createKeyAccount(data: {
+  name: string
+  company?: string
+  logo_url?: string
+}): Promise<KeyAccount> {
+  const maxPos = await db
+    .select({ max: sql<number>`coalesce(max(${keyAccounts.position}), -1)` })
+    .from(keyAccounts)
+
+  const [row] = await db
+    .insert(keyAccounts)
+    .values({ ...data, position: (maxPos[0]?.max ?? -1) + 1 })
+    .returning()
+
+  return {
+    id: row.id,
+    name: row.name,
+    company: row.company ?? '',
+    logo_url: row.logo_url ?? '',
+    position: row.position ?? 0,
+    created_at: row.created_at ?? new Date(),
+  }
+}
+
+export async function updateKeyAccount(id: string, fields: { name?: string; company?: string; logo_url?: string }) {
+  await db.update(keyAccounts).set(fields).where(eq(keyAccounts.id, id))
+}
+
+export async function deleteKeyAccount(id: string) {
+  await db.delete(keyAccounts).where(eq(keyAccounts.id, id))
+}
+
+export async function updateKeyAccountPositions(updates: { id: string; position: number }[]) {
+  await Promise.all(
+    updates.map((u) =>
+      db.update(keyAccounts).set({ position: u.position }).where(eq(keyAccounts.id, u.id))
+    )
+  )
+}
+
+// ─── Key Account <-> Initiative linking ───
+
+export async function getKeyAccountInitiatives(keyAccountId: string): Promise<KeyAccountInitiative[]> {
+  const rows = await db
+    .select()
+    .from(keyAccountInitiatives)
+    .where(eq(keyAccountInitiatives.key_account_id, keyAccountId))
+    .orderBy(asc(keyAccountInitiatives.created_at))
+
+  return rows.map((r) => ({
+    id: r.id,
+    key_account_id: r.key_account_id,
+    initiative_id: r.initiative_id,
+    note: r.note ?? '',
+    created_at: r.created_at ?? new Date(),
+  }))
+}
+
+export async function getInitiativeKeyAccounts(initiativeId: string): Promise<KeyAccount[]> {
+  const links = await db
+    .select({ key_account_id: keyAccountInitiatives.key_account_id })
+    .from(keyAccountInitiatives)
+    .where(eq(keyAccountInitiatives.initiative_id, initiativeId))
+
+  if (links.length === 0) return []
+
+  const ids = links.map((l) => l.key_account_id)
+  const accounts = await getKeyAccounts()
+  return accounts.filter((a) => ids.includes(a.id))
+}
+
+export async function linkKeyAccountInitiative(keyAccountId: string, initiativeId: string, note?: string) {
+  await db.insert(keyAccountInitiatives).values({
+    key_account_id: keyAccountId,
+    initiative_id: initiativeId,
+    note: note ?? '',
+  }).onConflictDoNothing()
+}
+
+export async function unlinkKeyAccountInitiative(keyAccountId: string, initiativeId: string) {
+  await db.delete(keyAccountInitiatives)
+    .where(
+      sql`${keyAccountInitiatives.key_account_id} = ${keyAccountId} AND ${keyAccountInitiatives.initiative_id} = ${initiativeId}`
+    )
+}
+
+export async function getAllKeyAccountLinks(): Promise<KeyAccountInitiative[]> {
+  const rows = await db
+    .select()
+    .from(keyAccountInitiatives)
+    .orderBy(asc(keyAccountInitiatives.created_at))
+
+  return rows.map((r) => ({
+    id: r.id,
+    key_account_id: r.key_account_id,
+    initiative_id: r.initiative_id,
+    note: r.note ?? '',
+    created_at: r.created_at ?? new Date(),
+  }))
 }

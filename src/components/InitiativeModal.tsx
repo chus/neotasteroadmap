@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { CRITERION_CONFIG, COLUMNS, EFFORT_CONFIG, MONTHS_2026 } from '@/lib/constants'
-import type { Initiative, StrategicLevel, Criterion, Column } from '@/types'
+import { CRITERION_CONFIG, COLUMNS, EFFORT_CONFIG, MONTHS_2026, PHASE_CONFIG, PARENT_COLORS } from '@/lib/constants'
+import type { Initiative, StrategicLevel, Criterion, Column, Phase } from '@/types'
 
 interface Props {
   initiative?: Initiative
@@ -18,6 +18,9 @@ interface Props {
     effort?: string | null
     target_month?: string | null
     column?: Column
+    is_parent?: boolean
+    parent_color?: string | null
+    phase?: string | null
   }) => void
   onDelete?: () => void
   onClose: () => void
@@ -34,6 +37,9 @@ export default function InitiativeModal({ initiative, defaultColumn, strategicLe
     effort: initiative?.effort ?? '',
     target_month: initiative?.target_month ?? '',
     column: initiative?.column ?? defaultColumn ?? ('' as string),
+    is_parent: initiative?.is_parent ?? false,
+    parent_color: initiative?.parent_color ?? PARENT_COLORS[0],
+    phase: initiative?.phase ?? '',
   })
 
   const backdropRef = useRef<HTMLDivElement>(null)
@@ -62,6 +68,9 @@ export default function InitiativeModal({ initiative, defaultColumn, strategicLe
       effort: form.effort || null,
       target_month: form.target_month || null,
       column: form.column ? (form.column as Column) : defaultColumn,
+      is_parent: form.is_parent,
+      parent_color: form.is_parent ? form.parent_color : null,
+      phase: form.is_parent && form.phase ? form.phase : null,
     })
   }
 
@@ -88,6 +97,54 @@ export default function InitiativeModal({ initiative, defaultColumn, strategicLe
             autoFocus
           />
         </div>
+
+        {/* Strategic bet toggle */}
+        <div className="flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Strategic bet</span>
+            <p className="text-[10px] text-neutral-400 mt-0.5">Parent initiative with child items and phase tracking.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setForm({ ...form, is_parent: !form.is_parent })}
+            className={`relative w-9 h-5 rounded-full transition-colors ${form.is_parent ? 'bg-[#5E6AD2]' : 'bg-neutral-300'}`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${form.is_parent ? 'translate-x-4' : ''}`} />
+          </button>
+        </div>
+
+        {/* Color picker + Phase (visible only for strategic bets) */}
+        {form.is_parent && (
+          <div className="space-y-3 p-3 rounded-lg border border-neutral-200 bg-neutral-50">
+            <div>
+              <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Color</label>
+              <div className="flex gap-1.5 mt-1.5">
+                {PARENT_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setForm({ ...form, parent_color: c })}
+                    className={`w-6 h-6 rounded-full border-2 transition-transform ${form.parent_color === c ? 'border-neutral-800 scale-110' : 'border-transparent hover:scale-105'}`}
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Phase</label>
+              <select
+                className="mt-1 w-full text-[12px] border border-neutral-300 rounded-lg px-3 py-2 outline-none"
+                value={form.phase}
+                onChange={(e) => setForm({ ...form, phase: e.target.value })}
+              >
+                <option value="">None</option>
+                {(Object.entries(PHASE_CONFIG) as [Phase, { label: string }][]).map(([k, v]) => (
+                  <option key={k} value={k}>{v.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
 
         <div>
           <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Subtitle</label>

@@ -10,6 +10,8 @@ export interface StrategicLevel {
   created_at: Date
 }
 
+export type Phase = 'discovery' | 'definition' | 'build' | 'launch' | 'done'
+
 export interface Initiative {
   id: string
   title: string
@@ -25,11 +27,33 @@ export interface Initiative {
   effort: string | null
   target_month: string | null
   is_public: boolean
+  is_parent: boolean
+  parent_initiative_id: string | null
+  parent_color: string | null
+  parent_title?: string
+  phase: Phase | null
   linear_project_id: string | null
   linear_url: string | null
   linear_state: string | null
   linear_synced_at: Date | null
   linear_sync_enabled: boolean
+  created_at: Date
+}
+
+export interface KeyAccount {
+  id: string
+  name: string
+  company: string
+  logo_url: string
+  position: number
+  created_at: Date
+}
+
+export interface KeyAccountInitiative {
+  id: string
+  key_account_id: string
+  initiative_id: string
+  note: string
   created_at: Date
 }
 

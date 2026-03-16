@@ -22,6 +22,10 @@ export const initiatives = pgTable('initiatives', {
   effort: text('effort'),
   target_month: text('target_month'),
   is_public: boolean('is_public').notNull().default(false),
+  is_parent: boolean('is_parent').notNull().default(false),
+  parent_initiative_id: uuid('parent_initiative_id'),
+  parent_color: text('parent_color'),
+  phase: text('phase'),
   linear_project_id: text('linear_project_id'),
   linear_url: text('linear_url'),
   linear_state: text('linear_state'),
@@ -79,6 +83,25 @@ export const linearSyncLog = pgTable('linear_sync_log', {
   error_message: text('error_message'),
   created_at: timestamp('created_at').defaultNow(),
 })
+
+export const keyAccounts = pgTable('key_accounts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  company: text('company').default(''),
+  logo_url: text('logo_url').default(''),
+  position: integer('position').default(0),
+  created_at: timestamp('created_at').defaultNow(),
+})
+
+export const keyAccountInitiatives = pgTable('key_account_initiatives', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  key_account_id: uuid('key_account_id').notNull().references(() => keyAccounts.id, { onDelete: 'cascade' }),
+  initiative_id: uuid('initiative_id').notNull().references(() => initiatives.id, { onDelete: 'cascade' }),
+  note: text('note').default(''),
+  created_at: timestamp('created_at').defaultNow(),
+}, (table) => [
+  unique('kai_account_initiative_unique').on(table.key_account_id, table.initiative_id),
+])
 
 export const activityLog = pgTable('activity_log', {
   id: uuid('id').defaultRandom().primaryKey(),
