@@ -190,7 +190,12 @@ export async function buildDigestData(periodStart: Date, periodEnd: Date): Promi
 
 export async function generateDigestDraft(data: DigestData): Promise<{ subject: string; html: string }> {
   const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set')
+  console.log('Anthropic key present:', !!apiKey)
+  console.log('Anthropic key prefix:', apiKey?.substring(0, 12))
+  console.log('Anthropic key length:', apiKey?.length)
+  if (!apiKey || apiKey.includes('placeholder') || apiKey.includes('your-api')) {
+    throw new Error('ANTHROPIC_API_KEY is missing or is a placeholder value')
+  }
 
   const prompt = `
 You are writing a monthly internal product digest email for NeoTaste, a restaurant deal subscription app operating in European cities.

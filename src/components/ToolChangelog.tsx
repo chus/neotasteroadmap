@@ -9,6 +9,12 @@ import { useState } from 'react'
 const TOOL_CHANGELOG = [
   {
     date: '2026-03-18',
+    title: 'Anthropic API key diagnosis and fix',
+    description: 'Diagnosed and fixed Anthropic API authentication error in comms digest generation.',
+    category: 'core',
+  },
+  {
+    date: '2026-03-18',
     title: 'Fix comms digest generation error',
     description: 'Fixed server action error handling in generateMonthlyDigest. Added structured error returns and logging. Verified ANTHROPIC_API_KEY requirement.',
     category: 'core',
