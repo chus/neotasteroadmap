@@ -1986,41 +1986,60 @@ export async function pushAndResolveDrift(initiativeId: string): Promise<{ succe
 
 // ─── Comms Digest ───
 
-export async function generateMonthlyDigest(options?: { periodStart?: Date; periodEnd?: Date; periodLabel?: string }) {
-  const now = new Date()
-  const periodStart = options?.periodStart ?? new Date(now.getFullYear(), now.getMonth() - 1, 1)
-  const periodEnd = options?.periodEnd ?? new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
-  const periodLabel = options?.periodLabel ?? periodStart.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+export async function generateMonthlyDigest(options?: { periodStart?: Date; periodEnd?: Date; periodLabel?: string }): Promise<{ skipped?: boolean; reason?: string | null; id?: string; subject?: string; autoSendAt?: Date; error?: boolean; message?: string }> {
+  try {
+    const now = new Date()
+    const periodStart = options?.periodStart ?? new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const periodEnd = options?.periodEnd ?? new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
+    const periodLabel = options?.periodLabel ?? periodStart.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 
-  const { buildDigestData, generateDigestDraft } = await import('@/lib/comms-agent')
-  const data = await buildDigestData(periodStart, periodEnd)
+    console.log('Generating digest for:', periodLabel, periodStart, periodEnd)
 
-  if (!data.should_send) {
+    const { buildDigestData, generateDigestDraft } = await import('@/lib/comms-agent')
+    const data = await buildDigestData(periodStart, periodEnd)
+
+    console.log('Digest data built:', {
+      shipped: data.shipped_count,
+      should_send: data.should_send,
+      skip_reason: data.skip_reason,
+    })
+
+    if (!data.should_send) {
+      const [digest] = await db.insert(commsDigests).values({
+        period_label: periodLabel,
+        period_start: periodStart.toISOString().slice(0, 10),
+        period_end: periodEnd.toISOString().slice(0, 10),
+        status: 'skipped',
+        skip_reason: data.skip_reason ?? '',
+      }).returning()
+      return { skipped: true, reason: data.skip_reason, id: digest.id }
+    }
+
+    console.log('Calling Anthropic for digest draft...')
+    const { subject, html } = await generateDigestDraft(data)
+    console.log('Draft generated, subject:', subject)
+
+    const autoSendAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+
     const [digest] = await db.insert(commsDigests).values({
       period_label: periodLabel,
       period_start: periodStart.toISOString().slice(0, 10),
       period_end: periodEnd.toISOString().slice(0, 10),
-      status: 'skipped',
-      skip_reason: data.skip_reason ?? '',
+      status: 'draft',
+      draft_content: JSON.stringify(data),
+      email_html: html,
+      email_subject: subject,
+      auto_send_at: autoSendAt,
     }).returning()
-    return { skipped: true, reason: data.skip_reason, id: digest.id }
+
+    return { skipped: false, id: digest.id, subject, autoSendAt }
+  } catch (err) {
+    console.error('generateMonthlyDigest failed:', err)
+    return {
+      error: true,
+      message: err instanceof Error ? err.message : 'Unknown error generating digest',
+    }
   }
-
-  const { subject, html } = await generateDigestDraft(data)
-  const autoSendAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
-
-  const [digest] = await db.insert(commsDigests).values({
-    period_label: periodLabel,
-    period_start: periodStart.toISOString().slice(0, 10),
-    period_end: periodEnd.toISOString().slice(0, 10),
-    status: 'draft',
-    draft_content: JSON.stringify(data),
-    email_html: html,
-    email_subject: subject,
-    auto_send_at: autoSendAt,
-  }).returning()
-
-  return { skipped: false, id: digest.id, subject, autoSendAt }
 }
 
 export async function getDigestHistory(): Promise<CommsDigest[]> {

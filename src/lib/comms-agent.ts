@@ -180,7 +180,7 @@ export async function buildDigestData(periodStart: Date, periodEnd: Date): Promi
   }
 
   // Threshold
-  if (data.shipped_count < 3) {
+  if (data.shipped_count < 1) {
     data.should_send = false
     data.skip_reason = `Only ${data.shipped_count} item${data.shipped_count === 1 ? '' : 's'} shipped — rolling into next month`
   }
@@ -261,8 +261,19 @@ Respond ONLY with this JSON structure, no markdown fences:
   })
 
   const result = await response.json()
+  if (!response.ok) {
+    throw new Error(`Anthropic API error (${response.status}): ${result.error?.message ?? JSON.stringify(result)}`)
+  }
+  if (!result.content?.[0]?.text) {
+    throw new Error('Anthropic API returned empty content')
+  }
   const text = result.content[0].text
-  const draft = JSON.parse(text)
+  let draft: { subject: string; opening: string; items: { title: string; headline: string; body: string; impact: string | null; user_signal: string | null }[]; voice_section: string | null; closing: string }
+  try {
+    draft = JSON.parse(text)
+  } catch {
+    throw new Error(`Failed to parse Anthropic response as JSON: ${text.slice(0, 200)}`)
+  }
   const { renderDigestEmail } = await import('@/lib/digest-email-template')
   const html = renderDigestEmail(draft, data)
   return { subject: draft.subject, html }

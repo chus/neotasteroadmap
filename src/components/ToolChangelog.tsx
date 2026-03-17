@@ -9,6 +9,12 @@ import { useState } from 'react'
 const TOOL_CHANGELOG = [
   {
     date: '2026-03-18',
+    title: 'Fix comms digest generation error',
+    description: 'Fixed server action error handling in generateMonthlyDigest. Added structured error returns and logging. Verified ANTHROPIC_API_KEY requirement.',
+    category: 'core',
+  },
+  {
+    date: '2026-03-18',
     title: 'Fix Linear sync log display and Comms nav link',
     description: 'Linear sync log entries now show human-readable text instead of raw JSON. Comms page added to top navigation.',
     category: 'core',

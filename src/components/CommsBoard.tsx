@@ -137,9 +137,16 @@ export default function CommsBoard({ initialDigests, initialRecipients }: Props)
         opts.periodLabel = `${s.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${e.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
       }
       const result = await generateMonthlyDigest(opts)
+
+      if ('error' in result && result.error) {
+        setGenError(result.message ?? 'Generation failed')
+        return
+      }
+
       if (result.skipped) {
         setGenError(`Skipped: ${result.reason}`)
       }
+
       await refreshDigests()
       if (result.id) {
         const d = await getDigestById(result.id)
