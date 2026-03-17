@@ -654,10 +654,11 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
 
     // Sync criterion ↔ column
     let finalColumn = form.column as Column
-    if (form.criterion === 'parked' && form.column !== 'parked') {
+    let finalCriterion = form.criterion as Criterion
+    if (finalCriterion === 'parked' && finalColumn !== 'parked') {
       finalColumn = 'parked'
-    } else if (form.criterion !== 'parked' && form.column === 'parked') {
-      finalColumn = 'later'
+    } else if (finalColumn === 'parked' && finalCriterion !== 'parked') {
+      finalCriterion = 'parked'
     }
 
     try {
@@ -665,7 +666,7 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
         title: form.title,
         subtitle: form.subtitle,
         strategic_level_id: form.strategic_level_id || null,
-        criterion: form.criterion,
+        criterion: finalCriterion,
         criterion_secondary: form.criterion_secondary ? (form.criterion_secondary as Criterion) : null,
         dep_note: form.dep_note,
         effort: form.effort || null,
@@ -809,7 +810,14 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                     <select
                       className={selectClass}
                       value={form.column}
-                      onChange={(e) => setForm({ ...form, column: e.target.value })}
+                      onChange={(e) => {
+                        const col = e.target.value
+                        setForm((s) => ({
+                          ...s,
+                          column: col,
+                          criterion: col === 'parked' ? 'parked' : s.criterion === 'parked' ? 'execution_ready' : s.criterion,
+                        }))
+                      }}
                       disabled={form.criterion === 'parked'}
                       style={{ opacity: form.criterion === 'parked' ? 0.5 : 1 }}
                     >
