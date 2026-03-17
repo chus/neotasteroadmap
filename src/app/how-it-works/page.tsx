@@ -625,6 +625,11 @@ export default function HowItWorks() {
           {[
             {
               date: '2026-03-18',
+              summary: 'Added API key fix to changelog.',
+              sections_updated: ['Tool changelog'],
+            },
+            {
+              date: '2026-03-18',
               summary: 'Minor fix notes added to changelog.',
               sections_updated: ['Tool changelog'],
             },

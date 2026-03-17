@@ -9,14 +9,8 @@ import { useState } from 'react'
 const TOOL_CHANGELOG = [
   {
     date: '2026-03-18',
-    title: 'Runtime env diagnostics + API key hardening',
-    description: 'Added /api/env-check runtime diagnostic endpoint. Applied .trim() to all ANTHROPIC_API_KEY reads to prevent hidden whitespace issues.',
-    category: 'core',
-  },
-  {
-    date: '2026-03-18',
-    title: 'Anthropic API key diagnosis and fix',
-    description: 'Diagnosed and fixed Anthropic API authentication error in comms digest generation.',
+    title: 'Fix Anthropic and Resend API key whitespace trimming',
+    description: 'Applied .trim() to ANTHROPIC_API_KEY and RESEND_API_KEY reads across all files to strip trailing newlines that caused 401 authentication errors. Removed temporary env-check diagnostic endpoint.',
     category: 'core',
   },
   {

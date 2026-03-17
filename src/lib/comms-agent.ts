@@ -190,16 +190,13 @@ export async function buildDigestData(periodStart: Date, periodEnd: Date): Promi
 
 export async function generateDigestDraft(data: DigestData): Promise<{ subject: string; html: string }> {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
-  console.log('[ANTHROPIC DEBUG]', {
-    keyExists: !!apiKey,
-    keyLength: apiKey?.length,
-    keyPrefix: apiKey?.substring(0, 20),
-    keySuffix: apiKey?.slice(-4),
-    hasWhitespace: apiKey !== apiKey?.trim(),
-    startsCorrectly: apiKey?.startsWith('sk-ant-'),
-  })
-  if (!apiKey || apiKey.includes('placeholder') || apiKey.includes('your-api')) {
-    throw new Error('ANTHROPIC_API_KEY is missing or is a placeholder value')
+
+  if (!apiKey) {
+    throw new Error('ANTHROPIC_API_KEY is not set or is empty')
+  }
+
+  if (!apiKey.startsWith('sk-ant-')) {
+    throw new Error(`ANTHROPIC_API_KEY appears malformed — prefix: ${apiKey.substring(0, 10)}`)
   }
 
   const prompt = `
