@@ -409,6 +409,9 @@ export default function HowItWorks() {
             <li style={liStyle}>3. Submissions above a similarity threshold are grouped into clusters</li>
             <li style={liStyle}>4. AI generates a human-readable label for each cluster</li>
           </ol>
+          <p style={bodyStyle}>
+            Cluster assignments include a confidence score (0&ndash;100%). High confidence (&gt;85%) assignments are treated as settled. Moderate confidence (55&ndash;72%) assignments are flagged for PM review. PMs can rename, merge, split, reassign submissions between clusters, create clusters manually, and archive clusters that are no longer relevant. Every agent run produces a plain-language explanation of what it did and why.
+          </p>
           <Callout label="Important" borderColor="#5DCAA5">
             The clustering runs asynchronously after submission &mdash; it never blocks or delays the user&apos;s experience. The first version of clustering uses a word-similarity fallback if the embedding API is unavailable, so the system degrades gracefully.
           </Callout>
@@ -623,6 +626,11 @@ export default function HowItWorks() {
           <p style={{ ...bodyStyle, marginBottom: 16 }}>A record of updates to this document.</p>
 
           {[
+            {
+              date: '2026-03-18',
+              summary: 'Updated AI clustering section with manual management capabilities and confidence scoring.',
+              sections_updated: ['How Voice works — AI clustering'],
+            },
             {
               date: '2026-03-18',
               summary: 'Added API key fix to changelog.',

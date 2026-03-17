@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, unique, boolean, date } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, integer, timestamp, unique, boolean, date, numeric } from 'drizzle-orm/pg-core'
 
 export const strategicLevels = pgTable('strategic_levels', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -186,6 +186,10 @@ export const feedbackSubmissions = pgTable('feedback_submissions', {
   created_at: timestamp('created_at').defaultNow(),
   reviewed_at: timestamp('reviewed_at'),
   reviewed_by: text('reviewed_by'),
+  assignment_confidence: numeric('assignment_confidence'),
+  assignment_method: text('assignment_method').default('ai'),
+  pm_note: text('pm_note').default(''),
+  reviewed: boolean('reviewed').default(false),
 })
 
 export const problemBacklog = pgTable('problem_backlog', {
@@ -223,6 +227,14 @@ export const feedbackClusters = pgTable('feedback_clusters', {
   backlog_item_id: uuid('backlog_item_id'),
   created_at: timestamp('created_at').defaultNow(),
   updated_at: timestamp('updated_at').defaultNow(),
+  is_archived: boolean('is_archived').default(false),
+  archived_at: timestamp('archived_at'),
+  archived_reason: text('archived_reason').default(''),
+  avg_quality_score: numeric('avg_quality_score'),
+  research_optin_count: integer('research_optin_count').default(0),
+  last_submission_at: timestamp('last_submission_at'),
+  pm_notes: text('pm_notes').default(''),
+  created_by: text('created_by').default('ai'),
 })
 
 export const agentRunLog = pgTable('agent_run_log', {
@@ -230,6 +242,18 @@ export const agentRunLog = pgTable('agent_run_log', {
   run_date: date('run_date').notNull(),
   report: text('report').notNull(),
   slack_posted: boolean('slack_posted').default(false),
+  created_at: timestamp('created_at').defaultNow(),
+})
+
+export const agentRunEvents = pgTable('agent_run_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  run_id: uuid('run_id').notNull().references(() => agentRunLog.id),
+  event_type: text('event_type').notNull(),
+  submission_id: uuid('submission_id'),
+  cluster_id: uuid('cluster_id'),
+  rationale: text('rationale').notNull(),
+  confidence: numeric('confidence'),
+  severity: text('severity'),
   created_at: timestamp('created_at').defaultNow(),
 })
 

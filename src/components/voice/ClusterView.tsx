@@ -3,12 +3,13 @@
 import { useState } from 'react'
 import {
   getClusters,
-  getClusterSubmissions,
   updateCluster,
   runClustering,
   graduateClusterToBacklog,
+  createClusterManually,
 } from '@/app/feedback-actions'
-import type { FeedbackCluster, FeedbackSubmission, ClusterStatus } from '@/types'
+import ClusterSlideOver from './ClusterSlideOver'
+import type { FeedbackCluster, ClusterStatus } from '@/types'
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   active:     { label: 'Active',     color: '#0C447C', bg: '#E6F1FB' },
@@ -30,24 +31,15 @@ interface Props {
 
 export default function ClusterView({ initialClusters }: Props) {
   const [clusters, setClusters] = useState(initialClusters)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [expandedSubs, setExpandedSubs] = useState<FeedbackSubmission[]>([])
-  const [loadingSubs, setLoadingSubs] = useState(false)
+  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null)
   const [runningClustering, setRunningClustering] = useState(false)
   const [clusterResult, setClusterResult] = useState<string | null>(null)
-  const [graduatingId, setGraduatingId] = useState<string | null>(null)
-
-  async function handleExpand(clusterId: string) {
-    if (expandedId === clusterId) {
-      setExpandedId(null)
-      return
-    }
-    setExpandedId(clusterId)
-    setLoadingSubs(true)
-    const subs = await getClusterSubmissions(clusterId)
-    setExpandedSubs(subs)
-    setLoadingSubs(false)
-  }
+  const [showArchived, setShowArchived] = useState(false)
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createTitle, setCreateTitle] = useState('')
+  const [createDesc, setCreateDesc] = useState('')
+  const [createArea, setCreateArea] = useState('')
+  const [creating, setCreating] = useState(false)
 
   async function handleRunClustering() {
     setRunningClustering(true)
@@ -59,31 +51,34 @@ export default function ClusterView({ initialClusters }: Props) {
     setRunningClustering(false)
   }
 
-  async function handleStatusChange(id: string, status: ClusterStatus) {
-    await updateCluster(id, { status })
-    setClusters(clusters.map((c) => c.id === id ? { ...c, status } : c))
+  async function refreshClusters() {
+    const updated = await getClusters()
+    setClusters(updated)
   }
 
-  async function handleGraduateToBacklog(clusterId: string, status: 'backlog' | 'watching') {
-    setGraduatingId(clusterId)
-    const watchUntil = status === 'watching'
-      ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      : undefined
-    const item = await graduateClusterToBacklog(clusterId, status, watchUntil)
-    if (item) {
-      setClusters(clusters.map((c) => c.id === clusterId ? {
-        ...c,
-        backlog_item_id: item.id,
-        status: (status === 'watching' ? 'monitoring' : 'planned') as ClusterStatus,
-      } : c))
-    }
-    setGraduatingId(null)
+  async function handleCreateCluster() {
+    if (!createTitle.trim()) return
+    setCreating(true)
+    await createClusterManually(createTitle, createDesc, createArea || undefined)
+    setCreating(false)
+    setShowCreateModal(false)
+    setCreateTitle('')
+    setCreateDesc('')
+    setCreateArea('')
+    await refreshClusters()
   }
+
+  const filtered = showArchived
+    ? clusters.filter(c => c.is_archived)
+    : clusters.filter(c => !c.is_archived)
+
+  const archivedCount = clusters.filter(c => c.is_archived).length
+  const selectedCluster = clusters.find(c => c.id === selectedClusterId)
 
   return (
     <div>
       {/* Controls */}
-      <div className="flex items-center gap-3 mb-4">
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
         <button
           onClick={handleRunClustering}
           disabled={runningClustering}
@@ -91,43 +86,92 @@ export default function ClusterView({ initialClusters }: Props) {
         >
           {runningClustering ? 'Clustering...' : 'Run clustering'}
         </button>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-neutral-200 text-neutral-600 hover:bg-neutral-50 transition-colors"
+        >
+          + Create cluster
+        </button>
+        {archivedCount > 0 && (
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            className={`text-[11px] font-medium px-2.5 py-1 rounded-full border transition-colors ${
+              showArchived
+                ? 'bg-neutral-800 text-white border-neutral-800'
+                : 'bg-white text-neutral-500 border-neutral-200 hover:bg-neutral-50'
+            }`}
+          >
+            Archived ({archivedCount})
+          </button>
+        )}
         {clusterResult && (
           <span className="text-[11px] text-green-600">{clusterResult}</span>
         )}
         <span className="text-[11px] text-neutral-400 ml-auto">
-          {clusters.length} cluster{clusters.length !== 1 ? 's' : ''}
+          {filtered.length} cluster{filtered.length !== 1 ? 's' : ''}
         </span>
       </div>
 
-      {/* Note about backlog flow */}
       <p className="text-[11px] text-neutral-400 mb-4">
-        Items go to the problem backlog first, then to the roadmap.
+        Click a cluster to view details, manage submissions, merge, or split.
       </p>
 
       {/* Cluster cards */}
       <div className="space-y-2">
-        {clusters.map((cluster) => {
+        {filtered.map((cluster) => {
           const statusCfg = STATUS_CONFIG[cluster.status] ?? STATUS_CONFIG.active
-          const isExpanded = expandedId === cluster.id
-          const hasBacklog = !!cluster.backlog_item_id
+          const qualityAvg = cluster.avg_quality_score
+          const lastSubDays = cluster.last_submission_at
+            ? Math.floor((Date.now() - new Date(cluster.last_submission_at).getTime()) / (1000 * 60 * 60 * 24))
+            : null
+
           return (
-            <div key={cluster.id} className="border border-neutral-200 rounded-lg overflow-hidden">
-              <button
-                onClick={() => handleExpand(cluster.id)}
-                className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-neutral-50 transition-colors"
-              >
+            <button
+              key={cluster.id}
+              onClick={() => setSelectedClusterId(cluster.id)}
+              className="w-full text-left border border-neutral-200 rounded-lg overflow-hidden hover:border-neutral-300 transition-colors"
+              style={{ opacity: cluster.is_archived ? 0.7 : 1 }}
+            >
+              <div className="px-4 py-3 flex items-center gap-3">
                 {cluster.avg_sentiment && (
                   <div
                     className="w-2 h-2 rounded-full shrink-0"
                     style={{ backgroundColor: SENTIMENT_DOT[cluster.avg_sentiment] ?? '#999' }}
                   />
                 )}
-                <span className="text-[13px] font-medium text-neutral-800 flex-1 truncate">
-                  {cluster.label}
-                </span>
-                <span className="text-[11px] text-neutral-400 shrink-0">
-                  {cluster.submission_count} submission{cluster.submission_count !== 1 ? 's' : ''}
-                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[13px] font-medium text-neutral-800 truncate">
+                      {cluster.label}
+                    </span>
+                    {cluster.created_by === 'manual' && (
+                      <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-blue-50 text-blue-600 shrink-0">
+                        manual
+                      </span>
+                    )}
+                  </div>
+                  {/* Health indicators */}
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-[10px] text-neutral-400">
+                      {cluster.submission_count} sub{cluster.submission_count !== 1 ? 's' : ''}
+                    </span>
+                    {qualityAvg != null && (
+                      <span className="text-[10px] text-neutral-400">
+                        quality {qualityAvg.toFixed(1)}
+                      </span>
+                    )}
+                    {cluster.research_optin_count > 0 && (
+                      <span className="text-[10px] text-green-600">
+                        🔬 {cluster.research_optin_count}
+                      </span>
+                    )}
+                    {lastSubDays != null && (
+                      <span className={`text-[10px] ${lastSubDays > 30 ? 'text-red-400' : lastSubDays > 7 ? 'text-amber-500' : 'text-neutral-400'}`}>
+                        last {lastSubDays}d ago
+                      </span>
+                    )}
+                  </div>
+                </div>
                 {cluster.top_urgency && (
                   <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded shrink-0 ${
                     cluster.top_urgency === 'high' ? 'bg-red-100 text-red-700' :
@@ -143,88 +187,92 @@ export default function ClusterView({ initialClusters }: Props) {
                 >
                   {statusCfg.label}
                 </span>
+                {cluster.is_archived && (
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-neutral-100 text-neutral-500 shrink-0">
+                    Archived
+                  </span>
+                )}
                 <svg
                   width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                  className={`text-neutral-400 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                  className="text-neutral-300 shrink-0"
                 >
-                  <polyline points="6 9 12 15 18 9" />
+                  <polyline points="9 18 15 12 9 6" />
                 </svg>
-              </button>
-
-              {isExpanded && (
-                <div className="px-4 pb-4 border-t border-neutral-100">
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 py-3 flex-wrap">
-                    {!hasBacklog ? (
-                      <>
-                        <select
-                          value={cluster.status}
-                          onChange={(e) => handleStatusChange(cluster.id, e.target.value as ClusterStatus)}
-                          className="text-[11px] font-medium px-2 py-1 rounded border border-neutral-200 bg-white outline-none"
-                        >
-                          <option value="active">Active</option>
-                          <option value="watching">Watching</option>
-                          <option value="resolved">Resolved</option>
-                        </select>
-
-                        <button
-                          onClick={() => handleGraduateToBacklog(cluster.id, 'backlog')}
-                          disabled={graduatingId === cluster.id}
-                          className="text-[11px] font-medium px-2.5 py-1 rounded border border-purple-200 text-purple-700 bg-purple-50 hover:bg-purple-100 transition-colors disabled:opacity-40"
-                        >
-                          {graduatingId === cluster.id ? 'Graduating...' : 'Add to backlog'}
-                        </button>
-
-                        <button
-                          onClick={() => handleGraduateToBacklog(cluster.id, 'watching')}
-                          disabled={graduatingId === cluster.id}
-                          className="text-[11px] font-medium px-2.5 py-1 rounded border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 transition-colors disabled:opacity-40"
-                        >
-                          Watch for 30 days
-                        </button>
-                      </>
-                    ) : (
-                      <a
-                        href="/feedback/backlog"
-                        className="text-[11px] font-medium px-2.5 py-1 rounded border border-green-200 text-green-700 bg-green-50 hover:bg-green-100 transition-colors"
-                      >
-                        View in backlog &rarr;
-                      </a>
-                    )}
-                  </div>
-
-                  {/* Submissions list */}
-                  {loadingSubs ? (
-                    <p className="text-[12px] text-neutral-400 py-4">Loading submissions...</p>
-                  ) : (
-                    <div className="space-y-1">
-                      {expandedSubs.map((sub) => (
-                        <div key={sub.id} className="flex items-start gap-2 px-3 py-2 bg-neutral-50 rounded">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-[12px] font-medium text-neutral-700 truncate">{sub.title}</p>
-                            <p className="text-[11px] text-neutral-500 line-clamp-2">{sub.body}</p>
-                          </div>
-                          <span className="text-[10px] text-neutral-400 shrink-0">
-                            {sub.name}
-                          </span>
-                        </div>
-                      ))}
-                      {expandedSubs.length === 0 && (
-                        <p className="text-[12px] text-neutral-400 italic py-2">No submissions in this cluster.</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+              </div>
+            </button>
           )
         })}
-        {clusters.length === 0 && (
+        {filtered.length === 0 && (
           <p className="text-[13px] text-neutral-400 text-center py-12 italic">
-            No clusters yet. Submit some feedback and run clustering to see themes emerge.
+            {showArchived ? 'No archived clusters.' : 'No clusters yet. Submit some feedback and run clustering to see themes emerge.'}
           </p>
         )}
       </div>
+
+      {/* Slide-over */}
+      {selectedCluster && (
+        <ClusterSlideOver
+          cluster={selectedCluster}
+          allClusters={clusters}
+          onClose={() => setSelectedClusterId(null)}
+          onUpdate={refreshClusters}
+        />
+      )}
+
+      {/* Create cluster modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={e => e.target === e.currentTarget && setShowCreateModal(false)}>
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-5">
+            <h3 className="text-[15px] font-semibold text-neutral-800 mb-4">Create cluster manually</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide">Title</label>
+                <input
+                  value={createTitle}
+                  onChange={e => setCreateTitle(e.target.value)}
+                  className="mt-1 w-full text-[13px] border border-neutral-200 rounded-md px-2.5 py-2 outline-none focus:border-[#50E88A]"
+                  placeholder="Cluster title..."
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide">Description</label>
+                <textarea
+                  value={createDesc}
+                  onChange={e => setCreateDesc(e.target.value)}
+                  rows={3}
+                  className="mt-1 w-full text-[13px] border border-neutral-200 rounded-md px-2.5 py-2 outline-none focus:border-[#50E88A]"
+                  placeholder="What this cluster is about..."
+                />
+              </div>
+              <div>
+                <label className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide">Strategic area (optional)</label>
+                <input
+                  value={createArea}
+                  onChange={e => setCreateArea(e.target.value)}
+                  className="mt-1 w-full text-[13px] border border-neutral-200 rounded-md px-2.5 py-2 outline-none focus:border-[#50E88A]"
+                  placeholder="e.g. Discovery, Retention..."
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 mt-4 justify-end">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="text-[12px] text-neutral-500 hover:text-neutral-700 px-3 py-1.5"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateCluster}
+                disabled={!createTitle.trim() || creating}
+                className="text-[12px] font-medium px-4 py-1.5 rounded-lg text-white disabled:opacity-40"
+                style={{ backgroundColor: '#0D2818' }}
+              >
+                {creating ? 'Creating...' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

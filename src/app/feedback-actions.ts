@@ -1,9 +1,9 @@
 'use server'
 
 import { db } from '@/db'
-import { feedbackSubmissions, researchParticipants, activityLog, initiatives, feedbackClusters, researchSessions, problemBacklog, agentRunLog, strategicLevels } from '@/db/schema'
+import { feedbackSubmissions, researchParticipants, activityLog, initiatives, feedbackClusters, researchSessions, problemBacklog, agentRunLog, agentRunEvents, strategicLevels } from '@/db/schema'
 import { eq, desc, sql, asc, and, ilike, isNull, isNotNull, lte, gte } from 'drizzle-orm'
-import type { FeedbackSubmission, FeedbackStatus, FeedbackCategory, UserType, ResearchParticipant, FeedbackCluster, ClusterStatus, ResearchSession, SessionType, ProblemBacklogItem, BacklogStatus, AgentRunLogEntry } from '@/types'
+import type { FeedbackSubmission, FeedbackStatus, FeedbackCategory, UserType, ResearchParticipant, FeedbackCluster, ClusterStatus, ResearchSession, SessionType, ProblemBacklogItem, BacklogStatus, AgentRunLogEntry, AgentRunEvent } from '@/types'
 
 // ─── Submission ───
 
@@ -184,31 +184,7 @@ export async function getFeedbackSubmissions(filters?: {
     ? await db.select().from(feedbackSubmissions).where(and(...conditions)).orderBy(desc(feedbackSubmissions.created_at))
     : await db.select().from(feedbackSubmissions).orderBy(desc(feedbackSubmissions.created_at))
 
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    email: r.email,
-    user_type: r.user_type as UserType,
-    category: r.category as FeedbackCategory,
-    title: r.title,
-    body: r.body,
-    restaurant_name: r.restaurant_name,
-    order_context: r.order_context as FeedbackSubmission['order_context'],
-    device: r.device,
-    app_version: r.app_version,
-    ai_triage: r.ai_triage,
-    ai_triaged_at: r.ai_triaged_at,
-    status: r.status as FeedbackStatus,
-    internal_note: r.internal_note ?? '',
-    actioned_initiative_id: r.actioned_initiative_id,
-    research_opt_in: r.research_opt_in,
-    embedding: r.embedding,
-    cluster_id: r.cluster_id,
-    status_notified_at: r.status_notified_at,
-    created_at: r.created_at!,
-    reviewed_at: r.reviewed_at,
-    reviewed_by: r.reviewed_by,
-  }))
+  return rows.map((r) => mapSubmission(r))
 }
 
 export async function getUnreviewedFeedbackCount(): Promise<number> {
@@ -404,7 +380,7 @@ export async function runClustering(): Promise<{ clustersCreated: number; submis
     : []
 
   // Try to assign to existing clusters first
-  const assigned: { subId: string; clusterId: string }[] = []
+  const assigned: { subId: string; clusterId: string; confidence: number }[] = []
   const remaining: typeof items = []
 
   for (const item of items) {
@@ -421,7 +397,7 @@ export async function runClustering(): Promise<{ clustersCreated: number; submis
     }
 
     if (bestCluster) {
-      assigned.push({ subId: item.id, clusterId: bestCluster })
+      assigned.push({ subId: item.id, clusterId: bestCluster, confidence: bestScore })
     } else {
       remaining.push(item)
     }
@@ -474,7 +450,10 @@ export async function runClustering(): Promise<{ clustersCreated: number; submis
     }).returning({ id: feedbackClusters.id })
 
     for (const member of cluster.members) {
-      await db.update(feedbackSubmissions).set({ cluster_id: newCluster.id }).where(eq(feedbackSubmissions.id, member.id))
+      await db.update(feedbackSubmissions).set({
+        cluster_id: newCluster.id,
+        assignment_method: 'ai',
+      }).where(eq(feedbackSubmissions.id, member.id))
     }
 
     clustersCreated++
@@ -482,8 +461,12 @@ export async function runClustering(): Promise<{ clustersCreated: number; submis
   }
 
   // Assign to existing clusters
-  for (const { subId, clusterId } of assigned) {
-    await db.update(feedbackSubmissions).set({ cluster_id: clusterId }).where(eq(feedbackSubmissions.id, subId))
+  for (const { subId, clusterId, confidence } of assigned) {
+    await db.update(feedbackSubmissions).set({
+      cluster_id: clusterId,
+      assignment_confidence: confidence.toString(),
+      assignment_method: 'ai',
+    }).where(eq(feedbackSubmissions.id, subId))
   }
 
   // Update submission counts on existing clusters
@@ -557,6 +540,14 @@ export async function getClusters(): Promise<FeedbackCluster[]> {
     backlog_item_id: r.backlog_item_id,
     created_at: r.created_at!,
     updated_at: r.updated_at!,
+    is_archived: r.is_archived ?? false,
+    archived_at: r.archived_at,
+    archived_reason: r.archived_reason ?? '',
+    avg_quality_score: r.avg_quality_score ? Number(r.avg_quality_score) : null,
+    research_optin_count: r.research_optin_count ?? 0,
+    last_submission_at: r.last_submission_at,
+    pm_notes: r.pm_notes ?? '',
+    created_by: r.created_by ?? 'ai',
   }))
 }
 
@@ -565,7 +556,11 @@ export async function getClusterSubmissions(clusterId: string): Promise<Feedback
     .where(eq(feedbackSubmissions.cluster_id!, clusterId))
     .orderBy(desc(feedbackSubmissions.created_at))
 
-  return rows.map((r) => ({
+  return rows.map((r) => mapSubmission(r))
+}
+
+function mapSubmission(r: typeof feedbackSubmissions.$inferSelect): FeedbackSubmission {
+  return {
     id: r.id,
     name: r.name,
     email: r.email,
@@ -589,7 +584,11 @@ export async function getClusterSubmissions(clusterId: string): Promise<Feedback
     created_at: r.created_at!,
     reviewed_at: r.reviewed_at,
     reviewed_by: r.reviewed_by,
-  }))
+    assignment_confidence: r.assignment_confidence ? Number(r.assignment_confidence) : null,
+    assignment_method: r.assignment_method ?? 'ai',
+    pm_note: r.pm_note ?? '',
+    reviewed: r.reviewed ?? false,
+  }
 }
 
 export async function updateCluster(id: string, data: {
@@ -619,6 +618,263 @@ export async function mergeClusters(sourceId: string, targetId: string) {
 
   // Delete source
   await db.delete(feedbackClusters).where(eq(feedbackClusters.id, sourceId))
+}
+
+// ─── Enhanced Cluster Management ───
+
+export async function renameCluster(id: string, label: string, description: string) {
+  await db.update(feedbackClusters).set({ label, description, updated_at: new Date() })
+    .where(eq(feedbackClusters.id, id))
+  await db.insert(activityLog).values({
+    action: 'renamed_cluster',
+    entity_type: 'cluster',
+    entity_id: id,
+    metadata: JSON.stringify({ label }),
+  })
+}
+
+export async function mergeCluster(sourceId: string, targetId: string) {
+  const [source] = await db.select().from(feedbackClusters).where(eq(feedbackClusters.id, sourceId))
+  const [target] = await db.select().from(feedbackClusters).where(eq(feedbackClusters.id, targetId))
+  if (!source || !target) return
+
+  // Move submissions from source to target
+  const sourceSubs = await db.select().from(feedbackSubmissions)
+    .where(eq(feedbackSubmissions.cluster_id!, sourceId))
+  for (const sub of sourceSubs) {
+    await db.update(feedbackSubmissions).set({
+      cluster_id: targetId,
+      pm_note: (sub.pm_note ?? '') + (sub.pm_note ? ' ' : '') + `[Merged from "${source.label}"]`,
+    }).where(eq(feedbackSubmissions.id, sub.id))
+  }
+
+  // Recalculate target counts
+  const allTargetSubs = await db.select().from(feedbackSubmissions)
+    .where(eq(feedbackSubmissions.cluster_id!, targetId))
+  const avgQuality = allTargetSubs.length > 0
+    ? allTargetSubs.reduce((sum, s) => {
+        try { return sum + (JSON.parse(s.ai_triage ?? '{}').quality_score ?? 0) } catch { return sum }
+      }, 0) / allTargetSubs.length
+    : null
+  const researchCount = allTargetSubs.filter(s => s.research_opt_in).length
+  const lastSub = allTargetSubs.sort((a, b) =>
+    (b.created_at?.getTime() ?? 0) - (a.created_at?.getTime() ?? 0)
+  )[0]?.created_at ?? null
+
+  await db.update(feedbackClusters).set({
+    submission_count: allTargetSubs.length,
+    avg_quality_score: avgQuality?.toString() ?? null,
+    research_optin_count: researchCount,
+    last_submission_at: lastSub,
+    updated_at: new Date(),
+  }).where(eq(feedbackClusters.id, targetId))
+
+  // Archive source
+  await db.update(feedbackClusters).set({
+    is_archived: true,
+    archived_at: new Date(),
+    archived_reason: `Merged into "${target.label}"`,
+    submission_count: 0,
+    updated_at: new Date(),
+  }).where(eq(feedbackClusters.id, sourceId))
+
+  await db.insert(activityLog).values({
+    action: 'merged_cluster',
+    entity_type: 'cluster',
+    entity_id: targetId,
+    metadata: JSON.stringify({ source_title: source.label, target_title: target.label, submissions_moved: sourceSubs.length }),
+  })
+}
+
+export async function splitCluster(clusterId: string, submissionIds: string[], newTitle: string, newDescription: string) {
+  const [original] = await db.select().from(feedbackClusters).where(eq(feedbackClusters.id, clusterId))
+  if (!original) return
+
+  // Create new cluster
+  const [newCluster] = await db.insert(feedbackClusters).values({
+    label: newTitle,
+    description: newDescription,
+    created_by: 'manual',
+    status: 'active',
+    submission_count: 0,
+  }).returning()
+
+  // Move submissions
+  for (const subId of submissionIds) {
+    await db.update(feedbackSubmissions).set({
+      cluster_id: newCluster.id,
+      assignment_method: 'manual',
+      assignment_confidence: null,
+    }).where(eq(feedbackSubmissions.id, subId))
+  }
+
+  // Recalculate counts for both clusters
+  await recalculateClusterCounts(clusterId)
+  await recalculateClusterCounts(newCluster.id)
+
+  await db.insert(activityLog).values({
+    action: 'split_cluster',
+    entity_type: 'cluster',
+    entity_id: clusterId,
+    metadata: JSON.stringify({ original_title: original.label, new_title: newTitle, submissions_moved: submissionIds.length }),
+  })
+
+  return { originalId: clusterId, newId: newCluster.id }
+}
+
+export async function reassignSubmission(submissionId: string, newClusterId: string, reason?: string) {
+  const [sub] = await db.select().from(feedbackSubmissions).where(eq(feedbackSubmissions.id, submissionId))
+  if (!sub) return
+  const oldClusterId = sub.cluster_id
+
+  await db.update(feedbackSubmissions).set({
+    cluster_id: newClusterId,
+    assignment_method: 'manual',
+    assignment_confidence: null,
+    pm_note: reason ? (sub.pm_note ?? '') + (sub.pm_note ? ' ' : '') + `[Reassigned: ${reason}]` : sub.pm_note ?? '',
+  }).where(eq(feedbackSubmissions.id, submissionId))
+
+  if (oldClusterId) await recalculateClusterCounts(oldClusterId)
+  await recalculateClusterCounts(newClusterId)
+
+  await db.insert(activityLog).values({
+    action: 'reassigned_submission',
+    entity_type: 'submission',
+    entity_id: submissionId,
+    metadata: JSON.stringify({ from_cluster: oldClusterId, to_cluster: newClusterId, reason }),
+  })
+}
+
+export async function createClusterManually(title: string, description: string, strategicArea?: string) {
+  const [cluster] = await db.insert(feedbackClusters).values({
+    label: title,
+    description,
+    theme: strategicArea ?? '',
+    created_by: 'manual',
+    status: 'active',
+    submission_count: 0,
+  }).returning()
+  return cluster
+}
+
+export async function archiveCluster(id: string, reason: string) {
+  await db.update(feedbackClusters).set({
+    is_archived: true,
+    archived_at: new Date(),
+    archived_reason: reason,
+    updated_at: new Date(),
+  }).where(eq(feedbackClusters.id, id))
+  await db.insert(activityLog).values({
+    action: 'archived_cluster',
+    entity_type: 'cluster',
+    entity_id: id,
+    metadata: JSON.stringify({ reason }),
+  })
+}
+
+export async function unarchiveCluster(id: string) {
+  await db.update(feedbackClusters).set({
+    is_archived: false,
+    archived_at: null,
+    archived_reason: '',
+    updated_at: new Date(),
+  }).where(eq(feedbackClusters.id, id))
+  await db.insert(activityLog).values({
+    action: 'unarchived_cluster',
+    entity_type: 'cluster',
+    entity_id: id,
+    metadata: '{}',
+  })
+}
+
+export async function updateClusterPMNotes(id: string, notes: string) {
+  await db.update(feedbackClusters).set({ pm_notes: notes, updated_at: new Date() })
+    .where(eq(feedbackClusters.id, id))
+}
+
+export async function addSubmissionPMNote(submissionId: string, note: string) {
+  await db.update(feedbackSubmissions).set({ pm_note: note })
+    .where(eq(feedbackSubmissions.id, submissionId))
+}
+
+export async function markSubmissionReviewed(submissionId: string) {
+  await db.update(feedbackSubmissions).set({ reviewed: true })
+    .where(eq(feedbackSubmissions.id, submissionId))
+}
+
+export async function getClusterWithSubmissions(clusterId: string) {
+  const [cluster] = await db.select().from(feedbackClusters).where(eq(feedbackClusters.id, clusterId))
+  if (!cluster) return null
+
+  const subs = await db.select().from(feedbackSubmissions)
+    .where(eq(feedbackSubmissions.cluster_id!, clusterId))
+    .orderBy(desc(feedbackSubmissions.created_at))
+
+  return {
+    cluster: {
+      id: cluster.id,
+      label: cluster.label,
+      description: cluster.description ?? '',
+      theme: cluster.theme ?? '',
+      submission_count: cluster.submission_count ?? 0,
+      avg_sentiment: cluster.avg_sentiment,
+      top_urgency: cluster.top_urgency,
+      status: cluster.status as ClusterStatus,
+      linked_initiative_id: cluster.linked_initiative_id,
+      backlog_item_id: cluster.backlog_item_id,
+      created_at: cluster.created_at!,
+      updated_at: cluster.updated_at!,
+      is_archived: cluster.is_archived ?? false,
+      archived_at: cluster.archived_at,
+      archived_reason: cluster.archived_reason ?? '',
+      avg_quality_score: cluster.avg_quality_score ? Number(cluster.avg_quality_score) : null,
+      research_optin_count: cluster.research_optin_count ?? 0,
+      last_submission_at: cluster.last_submission_at,
+      pm_notes: cluster.pm_notes ?? '',
+      created_by: cluster.created_by ?? 'ai',
+    } as FeedbackCluster,
+    submissions: subs.map(r => mapSubmission(r)),
+  }
+}
+
+export async function getAgentRunEvents(runId: string): Promise<AgentRunEvent[]> {
+  const rows = await db.select().from(agentRunEvents)
+    .where(eq(agentRunEvents.run_id, runId))
+    .orderBy(asc(agentRunEvents.created_at))
+  return rows.map(r => ({
+    id: r.id,
+    run_id: r.run_id,
+    event_type: r.event_type,
+    submission_id: r.submission_id,
+    cluster_id: r.cluster_id,
+    rationale: r.rationale,
+    confidence: r.confidence ? Number(r.confidence) : null,
+    severity: r.severity,
+    created_at: r.created_at!,
+  }))
+}
+
+async function recalculateClusterCounts(clusterId: string) {
+  const subs = await db.select().from(feedbackSubmissions)
+    .where(eq(feedbackSubmissions.cluster_id!, clusterId))
+
+  const avgQuality = subs.length > 0
+    ? subs.reduce((sum, s) => {
+        try { return sum + (JSON.parse(s.ai_triage ?? '{}').quality_score ?? 0) } catch { return sum }
+      }, 0) / subs.length
+    : null
+  const researchCount = subs.filter(s => s.research_opt_in).length
+  const lastSub = subs.sort((a, b) =>
+    (b.created_at?.getTime() ?? 0) - (a.created_at?.getTime() ?? 0)
+  )[0]?.created_at ?? null
+
+  await db.update(feedbackClusters).set({
+    submission_count: subs.length,
+    avg_quality_score: avgQuality?.toString() ?? null,
+    research_optin_count: researchCount,
+    last_submission_at: lastSub,
+    updated_at: new Date(),
+  }).where(eq(feedbackClusters.id, clusterId))
 }
 
 export async function getSimilarFeedback(text: string): Promise<{ id: string; title: string; score: number }[]> {

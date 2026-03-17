@@ -178,6 +178,10 @@ export interface FeedbackSubmission {
   created_at: Date
   reviewed_at: Date | null
   reviewed_by: string | null
+  assignment_confidence: number | null
+  assignment_method: string
+  pm_note: string
+  reviewed: boolean
 }
 
 export interface ResearchParticipant {
@@ -209,6 +213,14 @@ export interface FeedbackCluster {
   backlog_item_id: string | null
   created_at: Date
   updated_at: Date
+  is_archived: boolean
+  archived_at: Date | null
+  archived_reason: string
+  avg_quality_score: number | null
+  research_optin_count: number
+  last_submission_at: Date | null
+  pm_notes: string
+  created_by: string
 }
 
 export type BacklogStatus = 'watching' | 'backlog' | 'promoted' | 'declined'
@@ -236,6 +248,18 @@ export interface ProblemBacklogItem {
   // Joined fields
   initiative_title?: string
   cluster_label?: string
+}
+
+export interface AgentRunEvent {
+  id: string
+  run_id: string
+  event_type: string
+  submission_id: string | null
+  cluster_id: string | null
+  rationale: string
+  confidence: number | null
+  severity: string | null
+  created_at: Date
 }
 
 export interface AgentRunLogEntry {

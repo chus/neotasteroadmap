@@ -9,6 +9,12 @@ import { useState } from 'react'
 const TOOL_CHANGELOG = [
   {
     date: '2026-03-18',
+    title: 'Voice agent — manual cluster management, run rationale, health indicators',
+    description: 'Full manual cluster management: rename, merge, split, reassign submissions, create from scratch, archive. Agent runs now produce plain-language rationale and a structured visual event log. Cluster health indicators show quality, research pool, trend, and last submission age. Confidence scores visible on every AI assignment.',
+    category: 'portal',
+  },
+  {
+    date: '2026-03-18',
     title: 'Fix Anthropic and Resend API key whitespace trimming',
     description: 'Applied .trim() to ANTHROPIC_API_KEY and RESEND_API_KEY reads across all files to strip trailing newlines that caused 401 authentication errors. Removed temporary env-check diagnostic endpoint.',
     category: 'core',

@@ -1,5 +1,5 @@
 import { db } from '@/db'
-import { feedbackSubmissions, feedbackClusters, initiatives, agentRunLog, problemBacklog } from '@/db/schema'
+import { feedbackSubmissions, feedbackClusters, initiatives, agentRunLog, agentRunEvents, problemBacklog } from '@/db/schema'
 import { eq, desc, sql, and, isNull, isNotNull, gte } from 'drizzle-orm'
 
 export interface AgentAnomaly {
@@ -290,13 +290,137 @@ export async function runFeedbackAgent(): Promise<AgentReport> {
     slackPosted,
   }
 
-  await db.insert(agentRunLog).values({
+  const [runLogEntry] = await db.insert(agentRunLog).values({
     run_date: report.date,
     report: JSON.stringify(report),
     slack_posted: slackPosted,
-  })
+  }).returning({ id: agentRunLog.id })
+
+  const runId = runLogEntry.id
+
+  // Step 9 — Log events for anomalies
+  for (const anomaly of anomalies) {
+    await db.insert(agentRunEvents).values({
+      run_id: runId,
+      event_type: 'anomaly',
+      cluster_id: anomaly.entity_id ?? null,
+      rationale: anomaly.description,
+      severity: anomaly.severity,
+    })
+  }
+
+  // Log events for merge suggestions
+  for (const suggestion of mergeSuggestions) {
+    await db.insert(agentRunEvents).values({
+      run_id: runId,
+      event_type: 'merge_suggested',
+      cluster_id: suggestion.clusterA,
+      rationale: `Consider merging "${suggestion.titles[0]}" and "${suggestion.titles[1]}" — ${suggestion.similarity}% similar`,
+      confidence: suggestion.similarity.toString(),
+    })
+  }
+
+  // Log events for new clusters
+  for (const nc of newClusterRows) {
+    await db.insert(agentRunEvents).values({
+      run_id: runId,
+      event_type: 'created_cluster',
+      cluster_id: nc.id,
+      rationale: `Created new cluster "${nc.label}"`,
+    })
+  }
+
+  // Step 10 — Update cluster health for all active clusters
+  const affectedClusterIds = [
+    ...allClusters.map(c => c.id),
+    ...newClusterRows.map(c => c.id),
+  ]
+  await updateClusterHealth([...new Set(affectedClusterIds)])
+
+  // Step 11 — Generate narrative summary
+  try {
+    const events = await db.select().from(agentRunEvents)
+      .where(eq(agentRunEvents.run_id, runId))
+    const narrative = await generateRunSummary(events, report)
+    if (narrative) {
+      const updatedReport = { ...report, narrative }
+      await db.update(agentRunLog).set({ report: JSON.stringify(updatedReport) })
+        .where(eq(agentRunLog.id, runId))
+    }
+  } catch {
+    // Non-critical
+  }
 
   return report
+}
+
+function getMatchingTerms(text: string, clusterDesc: string): string {
+  const wordsA = new Set(text.toLowerCase().split(/\s+/).filter(w => w.length > 4))
+  const wordsB = new Set(clusterDesc.toLowerCase().split(/\s+/).filter(w => w.length > 4))
+  const shared = [...wordsA].filter(w => wordsB.has(w)).slice(0, 3)
+  return shared.length ? shared.join(', ') : 'semantic similarity'
+}
+
+async function updateClusterHealth(clusterIds: string[]) {
+  for (const clusterId of clusterIds) {
+    const subs = await db.select().from(feedbackSubmissions)
+      .where(eq(feedbackSubmissions.cluster_id!, clusterId))
+
+    if (subs.length === 0) continue
+
+    const avgQuality = subs.reduce((sum, s) => {
+      try { return sum + (JSON.parse(s.ai_triage ?? '{}').quality_score ?? 0) } catch { return sum }
+    }, 0) / subs.length
+    const researchCount = subs.filter(s => s.research_opt_in).length
+    const lastSubmission = subs.sort((a, b) =>
+      (b.created_at?.getTime() ?? 0) - (a.created_at?.getTime() ?? 0)
+    )[0]?.created_at ?? null
+
+    await db.update(feedbackClusters).set({
+      avg_quality_score: avgQuality.toString(),
+      research_optin_count: researchCount,
+      submission_count: subs.length,
+      last_submission_at: lastSubmission,
+    }).where(eq(feedbackClusters.id, clusterId))
+  }
+}
+
+async function generateRunSummary(
+  events: (typeof agentRunEvents.$inferSelect)[],
+  report: AgentReport,
+): Promise<string | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
+  if (!apiKey) return null
+
+  const eventSummary = events.map(e => ({
+    type: e.event_type,
+    rationale: e.rationale,
+    confidence: e.confidence ? Number(e.confidence) : undefined,
+  }))
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        messages: [{
+          role: 'user',
+          content: `Summarise what this feedback agent run did in 2-3 plain sentences. Write as if explaining to a PM what the AI did while they were away. Be specific about numbers and cluster names.\n\nProcessed: ${report.newSubmissions} submissions, ${report.newClusters} new clusters, ${report.anomalies.length} anomalies.\n\nEvents: ${JSON.stringify(eventSummary)}`,
+        }],
+      }),
+    })
+    if (!response.ok) return null
+    const result = await response.json()
+    return result.content?.[0]?.text?.trim() ?? null
+  } catch {
+    return null
+  }
 }
 
 function titleSimilarity(a: string, b: string): number {
