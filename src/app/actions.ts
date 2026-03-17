@@ -1,12 +1,12 @@
 'use server'
 
 import { db } from '@/db'
-import { initiatives, strategicLevels, featureRequests, votes, requestComments, activityLog, linearSyncLog, keyAccounts, keyAccountInitiatives, initiativeReactions, digestSubscribers, decisionLog } from '@/db/schema'
-import { eq, asc, desc, sql, isNull, ilike, or, inArray, and } from 'drizzle-orm'
+import { initiatives, strategicLevels, featureRequests, votes, requestComments, activityLog, linearSyncLog, keyAccounts, keyAccountInitiatives, initiativeReactions, digestSubscribers, decisionLog, feedbackClusters, feedbackSubmissions, commsDigests, digestRecipients } from '@/db/schema'
+import { eq, asc, desc, sql, isNull, ilike, or, inArray, and, not, lte, gte, between } from 'drizzle-orm'
 import { createHash } from 'crypto'
 import { headers } from 'next/headers'
 import { getFingerprint } from '@/lib/fingerprint'
-import type { Initiative, StrategicLevel, Column, FeatureRequest, RequestStatus, Criterion, Phase, RequestComment, LinearSyncLogEntry, KeyAccount, KeyAccountInitiative, ReactionCount, DigestSubscriber, DecisionEntry } from '@/types'
+import type { Initiative, StrategicLevel, Column, FeatureRequest, RequestStatus, Criterion, Phase, RequestComment, LinearSyncLogEntry, KeyAccount, KeyAccountInitiative, ReactionCount, DigestSubscriber, DecisionEntry, CommsDigest, DigestRecipient } from '@/types'
 
 // ─── Initiatives ───
 
@@ -54,6 +54,11 @@ export async function getInitiatives(): Promise<Initiative[]> {
       sync_drift: initiatives.sync_drift,
       sync_drift_detected_at: initiatives.sync_drift_detected_at,
       sync_dismissed_at: initiatives.sync_dismissed_at,
+      released_at: initiatives.released_at,
+      release_note: initiatives.release_note,
+      impact_metric: initiatives.impact_metric,
+      impact_measured_at: initiatives.impact_measured_at,
+      shipped_by: initiatives.shipped_by,
       created_at: initiatives.created_at,
       level_name: strategicLevels.name,
       level_color: strategicLevels.color,
@@ -112,6 +117,11 @@ export async function getInitiatives(): Promise<Initiative[]> {
     sync_drift: r.sync_drift ?? null,
     sync_drift_detected_at: r.sync_drift_detected_at ?? null,
     sync_dismissed_at: r.sync_dismissed_at ?? null,
+    released_at: r.released_at ?? null,
+    release_note: r.release_note ?? null,
+    impact_metric: r.impact_metric ?? null,
+    impact_measured_at: r.impact_measured_at ?? null,
+    shipped_by: r.shipped_by ?? null,
     created_at: r.created_at ?? new Date(),
   }))
 }
@@ -159,9 +169,17 @@ export async function updateInitiative(
     phase?: string | null
     confidence_problem?: number | null
     confidence_solution?: number | null
+    impact_metric?: string | null
+    impact_measured_at?: string | null
+    shipped_by?: string | null
   }
 ) {
-  await db.update(initiatives).set(fields).where(eq(initiatives.id, id))
+  // Convert impact_measured_at from string to Date if provided
+  const dbFields: Record<string, unknown> = { ...fields }
+  if ('impact_measured_at' in fields) {
+    dbFields.impact_measured_at = fields.impact_measured_at ? new Date(fields.impact_measured_at) : null
+  }
+  await db.update(initiatives).set(dbFields).where(eq(initiatives.id, id))
 }
 
 export async function createInitiative(data: {
@@ -246,6 +264,11 @@ function mapInitiativeRow(
     sync_drift: row.sync_drift ?? null,
     sync_drift_detected_at: row.sync_drift_detected_at ?? null,
     sync_dismissed_at: row.sync_dismissed_at ?? null,
+    released_at: row.released_at ?? null,
+    release_note: row.release_note ?? null,
+    impact_metric: row.impact_metric ?? null,
+    impact_measured_at: row.impact_measured_at ?? null,
+    shipped_by: row.shipped_by ?? null,
     created_at: row.created_at ?? new Date(),
   }
 }
@@ -312,6 +335,11 @@ export async function getPublicInitiatives(): Promise<Initiative[]> {
       sync_drift: initiatives.sync_drift,
       sync_drift_detected_at: initiatives.sync_drift_detected_at,
       sync_dismissed_at: initiatives.sync_dismissed_at,
+      released_at: initiatives.released_at,
+      release_note: initiatives.release_note,
+      impact_metric: initiatives.impact_metric,
+      impact_measured_at: initiatives.impact_measured_at,
+      shipped_by: initiatives.shipped_by,
       created_at: initiatives.created_at,
       level_name: strategicLevels.name,
       level_color: strategicLevels.color,
@@ -368,6 +396,11 @@ export async function getPublicInitiatives(): Promise<Initiative[]> {
     sync_drift: r.sync_drift ?? null,
     sync_drift_detected_at: r.sync_drift_detected_at ?? null,
     sync_dismissed_at: r.sync_dismissed_at ?? null,
+    released_at: r.released_at ?? null,
+    release_note: r.release_note ?? null,
+    impact_metric: r.impact_metric ?? null,
+    impact_measured_at: r.impact_measured_at ?? null,
+    shipped_by: r.shipped_by ?? null,
     created_at: r.created_at ?? new Date(),
   }))
 }
@@ -1716,12 +1749,92 @@ export async function linkExistingToLinear(
   }
 }
 
-export async function releaseInitiative(id: string, releaseNote: string) {
+export async function releaseInitiative(id: string, releaseNote: string, impactMetric?: string, impactMeasuredAt?: string) {
   await db.update(initiatives).set({
     column: 'released',
     released_at: new Date(),
     release_note: releaseNote,
+    impact_metric: impactMetric || '',
+    impact_measured_at: impactMeasuredAt ? new Date(impactMeasuredAt) : null,
   }).where(eq(initiatives.id, id))
+
+  // Notify Voice submitters whose feedback was addressed by this initiative
+  const [initiative] = await db.select({ title: initiatives.title }).from(initiatives).where(eq(initiatives.id, id))
+  if (!initiative) return
+
+  try {
+    const linkedClusters = await db
+      .select()
+      .from(feedbackClusters)
+      .where(eq(feedbackClusters.linked_initiative_id, id))
+      .limit(1)
+
+    if (linkedClusters.length > 0) {
+      const cluster = linkedClusters[0]
+      const submissions = await db
+        .select()
+        .from(feedbackSubmissions)
+        .where(
+          and(
+            eq(feedbackSubmissions.cluster_id, cluster.id),
+            not(eq(feedbackSubmissions.email, ''))
+          )
+        )
+
+      const { sendEmail } = await import('@/lib/email')
+      const { voiceShippedNotification } = await import('@/lib/voice-email-templates')
+      const emailsSent = new Set<string>()
+      for (const sub of submissions) {
+        if (emailsSent.has(sub.email)) continue
+        emailsSent.add(sub.email)
+        const { subject, html } = voiceShippedNotification(
+          { name: sub.name, title: sub.title, body: sub.body },
+          { label: cluster.label },
+          initiative,
+          releaseNote,
+          impactMetric,
+        )
+        sendEmail(sub.email, subject, html).catch(err =>
+          console.warn('Voice shipped notification failed:', err)
+        )
+      }
+    }
+  } catch (err) {
+    console.warn('Voice shipped notification error:', err)
+  }
+}
+
+export async function getShippedInitiatives() {
+  const rows = await db
+    .select({
+      id: initiatives.id,
+      title: initiatives.title,
+      subtitle: initiatives.subtitle,
+      strategic_level_name: strategicLevels.name,
+      strategic_level_color: strategicLevels.color,
+      released_at: initiatives.released_at,
+      release_note: initiatives.release_note,
+      impact_metric: initiatives.impact_metric,
+      impact_measured_at: initiatives.impact_measured_at,
+      shipped_by: initiatives.shipped_by,
+      is_public: initiatives.is_public,
+    })
+    .from(initiatives)
+    .leftJoin(strategicLevels, eq(initiatives.strategic_level_id, strategicLevels.id))
+    .where(eq(initiatives.column, 'released'))
+    .orderBy(desc(initiatives.released_at))
+
+  // Group by month
+  const groups: Record<string, { month: string; monthKey: string; initiatives: typeof rows }> = {}
+  for (const row of rows) {
+    const d = row.released_at ? new Date(row.released_at) : new Date()
+    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const month = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+    if (!groups[monthKey]) groups[monthKey] = { month, monthKey, initiatives: [] }
+    groups[monthKey].initiatives.push(row)
+  }
+
+  return Object.values(groups).sort((a, b) => b.monthKey.localeCompare(a.monthKey))
 }
 
 // ─── Drift Detection ───
@@ -1868,5 +1981,188 @@ export async function pushAndResolveDrift(initiativeId: string): Promise<{ succe
     sync_drift_detected_at: null,
   }).where(eq(initiatives.id, initiativeId))
 
+  return { success: true }
+}
+
+// ─── Comms Digest ───
+
+export async function generateMonthlyDigest(options?: { periodStart?: Date; periodEnd?: Date; periodLabel?: string }) {
+  const now = new Date()
+  const periodStart = options?.periodStart ?? new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const periodEnd = options?.periodEnd ?? new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
+  const periodLabel = options?.periodLabel ?? periodStart.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+
+  const { buildDigestData, generateDigestDraft } = await import('@/lib/comms-agent')
+  const data = await buildDigestData(periodStart, periodEnd)
+
+  if (!data.should_send) {
+    const [digest] = await db.insert(commsDigests).values({
+      period_label: periodLabel,
+      period_start: periodStart.toISOString().slice(0, 10),
+      period_end: periodEnd.toISOString().slice(0, 10),
+      status: 'skipped',
+      skip_reason: data.skip_reason ?? '',
+    }).returning()
+    return { skipped: true, reason: data.skip_reason, id: digest.id }
+  }
+
+  const { subject, html } = await generateDigestDraft(data)
+  const autoSendAt = new Date(Date.now() + 24 * 60 * 60 * 1000)
+
+  const [digest] = await db.insert(commsDigests).values({
+    period_label: periodLabel,
+    period_start: periodStart.toISOString().slice(0, 10),
+    period_end: periodEnd.toISOString().slice(0, 10),
+    status: 'draft',
+    draft_content: JSON.stringify(data),
+    email_html: html,
+    email_subject: subject,
+    auto_send_at: autoSendAt,
+  }).returning()
+
+  return { skipped: false, id: digest.id, subject, autoSendAt }
+}
+
+export async function getDigestHistory(): Promise<CommsDigest[]> {
+  const rows = await db.select().from(commsDigests).orderBy(desc(commsDigests.created_at))
+  return rows.map(r => ({
+    id: r.id,
+    period_label: r.period_label,
+    period_start: r.period_start ? new Date(r.period_start) : new Date(),
+    period_end: r.period_end ? new Date(r.period_end) : new Date(),
+    status: (r.status ?? 'draft') as CommsDigest['status'],
+    skip_reason: r.skip_reason ?? '',
+    draft_content: r.draft_content ?? '',
+    email_html: r.email_html ?? '',
+    email_subject: r.email_subject ?? '',
+    recipient_count: r.recipient_count ?? 0,
+    sent_at: r.sent_at ?? null,
+    auto_send_at: r.auto_send_at ?? null,
+    pm_edited: r.pm_edited ?? false,
+    created_at: r.created_at ?? new Date(),
+  }))
+}
+
+export async function getDigestById(id: string): Promise<CommsDigest | null> {
+  const [row] = await db.select().from(commsDigests).where(eq(commsDigests.id, id))
+  if (!row) return null
+  return {
+    id: row.id,
+    period_label: row.period_label,
+    period_start: row.period_start ? new Date(row.period_start) : new Date(),
+    period_end: row.period_end ? new Date(row.period_end) : new Date(),
+    status: (row.status ?? 'draft') as CommsDigest['status'],
+    skip_reason: row.skip_reason ?? '',
+    draft_content: row.draft_content ?? '',
+    email_html: row.email_html ?? '',
+    email_subject: row.email_subject ?? '',
+    recipient_count: row.recipient_count ?? 0,
+    sent_at: row.sent_at ?? null,
+    auto_send_at: row.auto_send_at ?? null,
+    pm_edited: row.pm_edited ?? false,
+    created_at: row.created_at ?? new Date(),
+  }
+}
+
+export async function updateDigestContent(id: string, html: string, subject: string) {
+  await db.update(commsDigests).set({
+    email_html: html,
+    email_subject: subject,
+    pm_edited: true,
+  }).where(eq(commsDigests.id, id))
+}
+
+export async function sendDigest(id: string) {
+  const [digest] = await db.select().from(commsDigests).where(eq(commsDigests.id, id)).limit(1)
+  if (!digest || digest.status === 'sent') return { error: 'Already sent or not found' }
+
+  const recipients = await db.select().from(digestRecipients).where(eq(digestRecipients.is_active, true))
+  const { sendEmail } = await import('@/lib/email')
+
+  let sent = 0
+  for (const recipient of recipients) {
+    const personalizedHtml = (digest.email_html ?? '').replace('RECIPIENT_EMAIL', encodeURIComponent(recipient.email))
+    await sendEmail(recipient.email, digest.email_subject ?? '', personalizedHtml)
+      .catch(err => console.warn(`Failed to send to ${recipient.email}:`, err))
+    sent++
+  }
+
+  await db.update(commsDigests).set({
+    status: 'sent',
+    sent_at: new Date(),
+    recipient_count: sent,
+  }).where(eq(commsDigests.id, id))
+
+  return { success: true, sent }
+}
+
+export async function skipDigest(id: string, reason: string) {
+  await db.update(commsDigests).set({
+    status: 'skipped',
+    skip_reason: reason,
+  }).where(eq(commsDigests.id, id))
+}
+
+export async function addDigestRecipient(email: string, name: string, role: string): Promise<{ reactivated?: boolean; created?: boolean }> {
+  const normalized = email.toLowerCase().trim()
+  const [existing] = await db.select().from(digestRecipients)
+    .where(eq(digestRecipients.email, normalized)).limit(1)
+
+  if (existing) {
+    await db.update(digestRecipients)
+      .set({ is_active: true, name, role })
+      .where(eq(digestRecipients.id, existing.id))
+    return { reactivated: true }
+  }
+
+  await db.insert(digestRecipients).values({
+    email: normalized,
+    name,
+    role,
+    is_active: true,
+  })
+  return { created: true }
+}
+
+export async function addDigestRecipientsBulk(
+  entries: { email: string; name: string; role: string }[]
+): Promise<{ added: number; reactivated: number; invalid: number }> {
+  let added = 0, reactivated = 0, invalid = 0
+  for (const entry of entries) {
+    if (!entry.email.includes('@')) { invalid++; continue }
+    const result = await addDigestRecipient(entry.email, entry.name, entry.role)
+    if (result.reactivated) reactivated++
+    else added++
+  }
+  return { added, reactivated, invalid }
+}
+
+export async function updateDigestRecipient(id: string, data: { name?: string; role?: string }) {
+  await db.update(digestRecipients).set(data).where(eq(digestRecipients.id, id))
+}
+
+export async function removeDigestRecipient(id: string) {
+  await db.update(digestRecipients).set({ is_active: false }).where(eq(digestRecipients.id, id))
+}
+
+export async function getDigestRecipients(): Promise<DigestRecipient[]> {
+  const rows = await db.select().from(digestRecipients).where(eq(digestRecipients.is_active, true)).orderBy(asc(digestRecipients.name))
+  return rows.map(r => ({
+    id: r.id,
+    email: r.email,
+    name: r.name,
+    role: r.role ?? '',
+    is_active: r.is_active ?? true,
+    created_at: r.created_at ?? new Date(),
+  }))
+}
+
+export async function sendTestEmail(digestId: string, testEmail: string) {
+  const [digest] = await db.select().from(commsDigests).where(eq(commsDigests.id, digestId)).limit(1)
+  if (!digest) return { error: 'Digest not found' }
+
+  const { sendEmail } = await import('@/lib/email')
+  const personalizedHtml = (digest.email_html ?? '').replace('RECIPIENT_EMAIL', encodeURIComponent(testEmail))
+  await sendEmail(testEmail, `[TEST] ${digest.email_subject ?? ''}`, personalizedHtml)
   return { success: true }
 }

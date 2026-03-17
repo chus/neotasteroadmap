@@ -155,3 +155,29 @@ export const PARENT_COLORS = [
   '#5E6AD2', '#E5484D', '#F76B15', '#12A594', '#E93D82',
   '#0091FF', '#7C66DC', '#CD5EB0', '#30A46C', '#FFC53D',
 ]
+
+export function formatSyncLogChanges(changesJson: string): string {
+  try {
+    const changes = JSON.parse(changesJson)
+    if (typeof changes !== 'object' || changes === null) return changesJson
+    if (changes.action === 'linked') {
+      return `Linked to Linear · state: ${changes.linear_state ?? 'unknown'}`
+    }
+    if (changes.action === 'pushed') {
+      return `Pushed to Linear · state: ${changes.linear_state ?? 'unknown'}`
+    }
+    if (changes.action === 'pulled') {
+      const parts: string[] = []
+      if (changes.column_changed) parts.push(`column: ${changes.column_before} → ${changes.column_after}`)
+      if (changes.target_month_changed) parts.push('target month updated')
+      if (changes.no_changes) return 'Pulled from Linear · no changes'
+      return `Pulled from Linear · ${parts.join(', ') || 'updated'}`
+    }
+    // Fallback for other JSON objects (e.g. push payloads like {"state":"Todo","targetDate":"..."})
+    return Object.entries(changes)
+      .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`)
+      .join(' · ')
+  } catch {
+    return changesJson
+  }
+}

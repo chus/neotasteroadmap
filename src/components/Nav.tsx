@@ -6,6 +6,8 @@ import { usePathname } from 'next/navigation'
 const links = [
   { href: '/', label: 'Roadmap' },
   { href: '/stats', label: 'Stats' },
+  { href: '/shipped', label: 'Shipped' },
+  { href: '/comms', label: 'Comms' },
   { href: '/how-it-works', label: 'How it works' },
   { href: '/requests', label: 'Feature requests' },
   { href: '/feedback', label: 'Voice' },
@@ -45,7 +47,7 @@ export default function Nav({ unreviewedCount = 0 }: Props) {
       {/* Right: nav links + settings gear */}
       <div className="flex items-center gap-5">
         {links.map((link) => {
-          const isActive = pathname === link.href
+          const isActive = link.href === '/' ? pathname === '/' : pathname === link.href || pathname.startsWith(link.href + '/')
           return (
             <Link
               key={link.href}

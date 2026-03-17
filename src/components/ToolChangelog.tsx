@@ -8,6 +8,60 @@ import { useState } from 'react'
 // Categories: core | board | integration | analytics | portal | sharing
 const TOOL_CHANGELOG = [
   {
+    date: '2026-03-18',
+    title: 'Fix Linear sync log display and Comms nav link',
+    description: 'Linear sync log entries now show human-readable text instead of raw JSON. Comms page added to top navigation.',
+    category: 'core',
+  },
+  {
+    date: '2026-03-18',
+    title: 'Comms digest — recipient management and preview page',
+    description: 'Improved recipient management with bulk email paste, role tagging, and inline editing. Added /comms/preview — a shareable full-page email preview with live auto-send countdown and one-click send.',
+    category: 'core',
+  },
+  {
+    date: '2026-03-18',
+    title: 'Monthly comms digest agent',
+    description: 'AI drafts a monthly internal product digest email using claude-sonnet-4-6. Covers everything shipped, impact metrics, Voice themes, and feature requests resolved. PM has 24h to review and edit before auto-send. Manage at /comms. Also fixes Voice shipped notification and origin email hardening.',
+    category: 'core',
+  },
+  {
+    date: '2026-03-18',
+    title: '/shipped — internal product showcase',
+    description: 'New page at /shipped showing everything delivered grouped by month. Each item shows release note, impact metric (optional), and linked feature requests fulfilled. Released column on board capped at 5 visible items with collapse toggle.',
+    category: 'board',
+  },
+  {
+    date: '2026-03-18',
+    title: 'Voice standalone app',
+    description: 'Voice feedback portal moved to a separate Vercel project (neotaste-voice) with its own URL. Shares the same Neon database. No internal nav or links to the roadmap — fully isolated for public user access.',
+    category: 'portal',
+  },
+  {
+    date: '2026-03-17',
+    title: 'Password gate removed',
+    description: 'Temporary password gate removed from the roadmap app. All internal routes are now open. Google SSO prompt is stored and ready to implement when needed.',
+    category: 'core',
+  },
+  {
+    date: '2026-03-17',
+    title: 'Voice unified docs + seed data',
+    description: '/docs and /how-it-works merged into a single page at /how-it-works with two sections: roadmap guide and Voice documentation. Voice portal seeded with 32 realistic submissions across 5 clusters and 4 European cities.',
+    category: 'portal',
+  },
+  {
+    date: '2026-03-17',
+    title: 'Voice trend stats and problem backlog',
+    description: 'Trend charts at /feedback/trends showing submission volume by strategic area, cluster velocity, city breakdown, and system health. Problem backlog at /feedback/backlog as a staging layer between Voice clusters and the roadmap.',
+    category: 'portal',
+  },
+  {
+    date: '2026-03-17',
+    title: 'Voice daily agent',
+    description: 'Daily cron (06:00 UTC) processes submissions, detects anomalies, checks watching items, suggests cluster merges, and posts a Slack briefing if anything noteworthy. Agent history and manual trigger at /feedback/agent.',
+    category: 'portal',
+  },
+  {
     date: '2026-03-17',
     title: 'Voice — Problem backlog',
     description: 'Staging layer between Voice clusters and the roadmap at /feedback/backlog. Items move through Watching → Backlog → Promoted/Declined. Clusters graduate to the backlog instead of going directly to the roadmap.',

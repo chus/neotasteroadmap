@@ -144,7 +144,7 @@ export default function HowItWorks() {
             ))}
           </div>
           <p style={{ ...bodyStyle, marginTop: 16 }}>
-            There is also a <strong>Released</strong> column. Dragging a card to Released triggers a release note prompt. Released initiatives appear on the public <Link href="/releases" className="text-[#5E6AD2] hover:underline">/releases</Link> changelog grouped by month.
+            There is also a <strong>Released</strong> column. Dragging a card to Released triggers a release note prompt with optional impact metric. Capped at 5 visible items on the board &mdash; a collapse/expand toggle shows older items. Full history at <Link href="/shipped" className="text-[#5E6AD2] hover:underline">/shipped</Link>. Released initiatives also appear on the public <Link href="/releases" className="text-[#5E6AD2] hover:underline">/releases</Link> changelog grouped by month.
           </p>
         </section>
 
@@ -254,7 +254,33 @@ export default function HowItWorks() {
             The <Link href="/stats" className="text-[#5E6AD2] hover:underline">/stats</Link> page shows initiative distribution by column, strategic level, criterion, effort, and target month. It includes a confidence matrix (problem confidence &times; solution confidence), a capacity planning view based on effort estimates and team size, and target month mismatch detection. Insights are auto-generated from the data &mdash; no AI needed.
           </p>
           <p style={{ ...bodyStyle, marginTop: 12 }}>
+            The <Link href="/shipped" className="text-[#5E6AD2] hover:underline">/shipped</Link> page shows everything delivered with release notes, impact metrics, and linked feature requests. Impact data can be added at release time or edited afterwards.
+          </p>
+          <p style={{ ...bodyStyle, marginTop: 12 }}>
             Voice metrics are also shown on the stats page: submission count, active clusters, growing themes, and research candidates.
+          </p>
+        </section>
+
+        <SectionDivider />
+
+        {/* What we shipped */}
+        <section>
+          <h1 id="shipped" style={h1Style}>What we shipped</h1>
+          <p style={bodyStyle}>
+            The <Link href="/shipped" className="text-[#5E6AD2] hover:underline">/shipped</Link> page is the internal product showcase &mdash; everything delivered grouped by month. Each item shows the release note, an optional impact metric (&ldquo;Redemption rate +12% in 30 days&rdquo;), and any feature requests or Voice clusters it fulfilled. It&apos;s designed to be shareable in all-hands decks and leadership reviews. Impact data can be added when releasing or updated afterwards from the initiative slide-over.
+          </p>
+        </section>
+
+        <SectionDivider />
+
+        {/* Monthly comms digest */}
+        <section>
+          <h1 id="comms" style={h1Style}>Monthly comms digest</h1>
+          <p style={bodyStyle}>
+            On the 1st of each month, the comms agent drafts a product digest email covering everything shipped in the previous month. Each shipped item gets a headline framing the problem it solved, expanded release note, impact metric if measured, and a user quote if linked to Voice feedback or a feature request. Stats at the top show items shipped, items with impact data, and user feedback themes actioned. AI drafts using claude-sonnet &mdash; PM has 24 hours to review, edit, and send, or it auto-sends. Manage recipients and review drafts at <Link href="/comms" className="text-[#5E6AD2] hover:underline">/comms</Link>. Internal only &mdash; goes to the team, not users.
+          </p>
+          <p style={bodyStyle}>
+            The digest preview is available at <Link href="/comms/preview" className="text-[#5E6AD2] hover:underline">/comms/preview</Link> &mdash; share this URL with the team before sending so they can see exactly what the email looks like. The preview shows a live countdown to auto-send and a Send now button for the PM to approve from the preview itself.
           </p>
         </section>
 
@@ -530,10 +556,13 @@ export default function HowItWorks() {
               ['/feedback/backlog', 'Problem backlog staging layer between clusters and roadmap.'],
               ['/feedback/trends', 'Trend charts and system health metrics.'],
               ['/feedback/agent', 'Daily agent run history and manual trigger.'],
+              ['/shipped', 'Internal showcase of everything delivered, grouped by month with impact data.'],
+              ['/comms', 'Monthly digest management — generate, review, edit, send, manage recipients.'],
               ['/stats', 'Stats page. Includes Voice metrics alongside roadmap analytics.'],
               ['/how-it-works', 'This page. Unified documentation for the roadmap and Voice.'],
               ['/requests', 'Feature request portal with Working Backwards intake.'],
               ['/releases', 'Public changelog of shipped initiatives.'],
+              ['voice.neotaste-voice.vercel.app', 'Standalone Voice submission form (separate Vercel project, public).'],
             ]}
           />
           <h2 style={h2Style}>Slack digest</h2>
@@ -594,6 +623,26 @@ export default function HowItWorks() {
           <p style={{ ...bodyStyle, marginBottom: 16 }}>A record of updates to this document.</p>
 
           {[
+            {
+              date: '2026-03-18',
+              summary: 'Minor fix notes added to changelog.',
+              sections_updated: ['Tool changelog'],
+            },
+            {
+              date: '2026-03-18',
+              summary: 'Updated comms digest section with preview page and recipient management details.',
+              sections_updated: ['Monthly comms digest'],
+            },
+            {
+              date: '2026-03-18',
+              summary: 'Added monthly comms digest documentation and /comms to where to find things.',
+              sections_updated: ['Monthly comms digest', 'Where to find things'],
+            },
+            {
+              date: '2026-03-18',
+              summary: 'Added /shipped showcase, comms digest, Voice standalone app, password gate removal, trend stats, problem backlog, and daily agent to changelog and documentation.',
+              sections_updated: ['What the columns mean', 'Stats and signals', 'What we shipped', 'Monthly comms digest', 'Voice — Where to find things'],
+            },
             {
               date: '2026-03-17',
               summary: 'Merged /docs and /how-it-works into a single unified documentation page.',

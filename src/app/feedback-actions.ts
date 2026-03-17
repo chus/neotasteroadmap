@@ -49,6 +49,13 @@ export async function submitFeedback(data: {
       }
     }
 
+    // Confirmation email — synchronous, before async triage
+    if (data.email) {
+      await sendConfirmationEmail(data.email, data.name, data.title, data.research_opt_in).catch(err =>
+        console.warn('Confirmation email failed:', err)
+      )
+    }
+
     // Log activity
     await db.insert(activityLog).values({
       action: 'feedback_submitted',
@@ -57,13 +64,8 @@ export async function submitFeedback(data: {
       metadata: JSON.stringify({ title: data.title, category: data.category, user_type: data.user_type }),
     })
 
-    // Fire-and-forget AI triage
+    // Async triage — non-blocking
     triageFeedbackSubmission(row.id).catch(() => {})
-
-    // Fire-and-forget confirmation email
-    if (data.email) {
-      sendConfirmationEmail(data.email, data.name, data.title, data.research_opt_in).catch(() => {})
-    }
 
     return { success: true, id: row.id }
   } catch (err) {

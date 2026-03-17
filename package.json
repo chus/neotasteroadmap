@@ -14,7 +14,8 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:seed:fields": "tsx src/db/seed-fields.ts",
     "db:check": "tsx src/db/check-fields.ts",
-    "db:seed:voice": "tsx src/db/seed-voice.ts"
+    "db:seed:voice": "tsx src/db/seed-voice.ts",
+    "db:seed:recipients": "DOTENV_CONFIG_PATH=.env.local tsx -r dotenv/config src/db/seed-digest-recipients.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

@@ -519,6 +519,34 @@ export default function StatsPage({ initiatives, levels, requests }: Props) {
       {/* Capacity planning */}
       <CapacitySection initiatives={initiatives} />
 
+      {/* Shipped */}
+      {(() => {
+        const released = initiatives.filter((i) => i.column === 'released')
+        const releasedWithImpact = released.filter((i) => i.impact_metric)
+        const impactPct = released.length > 0 ? Math.round((releasedWithImpact.length / released.length) * 100) : 0
+        if (released.length === 0) return null
+        return (
+          <section className="mb-8">
+            <h2 className="text-[14px] font-semibold text-neutral-800 mb-1">Shipped</h2>
+            <p className="text-[12px] text-neutral-400 mb-4">Released initiatives and impact data coverage.</p>
+            <div className="grid grid-cols-3 gap-4 mb-3">
+              <SummaryCard label="Released" value={released.length} color="#10b981" />
+              <SummaryCard label="With impact data" value={releasedWithImpact.length} sublabel={`${impactPct}% of released`} />
+              <SummaryCard label="Without impact" value={released.length - releasedWithImpact.length} />
+            </div>
+            {impactPct < 30 && released.length >= 3 && (
+              <div className="flex items-center gap-2 text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                <span>⚠</span>
+                <span>Less than 30% of shipped initiatives have impact data. Consider adding metrics retroactively.</span>
+              </div>
+            )}
+            <a href="/shipped" className="text-[12px] text-blue-600 hover:underline">
+              View full shipped page →
+            </a>
+          </section>
+        )
+      })()}
+
       {/* Monthly distribution */}
       <section className="mb-8">
         <h2 className="text-[14px] font-semibold text-neutral-800 mb-1">Target month distribution</h2>

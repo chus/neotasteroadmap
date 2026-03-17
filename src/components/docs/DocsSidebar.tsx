@@ -15,6 +15,8 @@ const GROUPS = [
       { id: 'linear-sync', label: 'Linear sync' },
       { id: 'views', label: 'Views' },
       { id: 'stats', label: 'Stats' },
+      { id: 'shipped', label: 'What we shipped' },
+      { id: 'comms', label: 'Monthly comms' },
       { id: 'feature-requests', label: 'Feature requests' },
       { id: 'what-moves-things', label: 'What moves things' },
     ],

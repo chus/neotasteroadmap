@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { testLinearConnection, pushToLinear, getAllLinearSyncLogs, runDriftDetection } from '@/app/actions'
 import LinearImportModal from './LinearImportModal'
+import { formatSyncLogChanges } from '@/lib/constants'
 import type { Initiative, StrategicLevel, LinearSyncLogEntry } from '@/types'
 
 interface Props {
@@ -192,7 +193,7 @@ export default function LinearSettings({ isConfigured, initiatives, strategicLev
                             <span className={`w-1.5 h-1.5 inline-block rounded-full ${entry.status === 'success' ? 'bg-green-500' : 'bg-red-500'}`} />
                           </td>
                           <td className="py-1.5 text-neutral-500 truncate max-w-[200px]">
-                            {entry.changes || entry.error_message || '—'}
+                            {entry.changes ? formatSyncLogChanges(entry.changes) : entry.error_message || '—'}
                           </td>
                           <td className="py-1.5 text-neutral-400">{timeAgo(new Date(entry.created_at))}</td>
                         </tr>

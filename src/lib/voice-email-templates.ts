@@ -42,6 +42,60 @@ export function feedbackConfirmation(
   }
 }
 
+export function voiceShippedNotification(
+  submission: { name: string; title: string; body: string },
+  cluster: { label: string },
+  initiative: { title: string },
+  releaseNote: string,
+  impactMetric?: string | null,
+): { subject: string; html: string } {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://neotasteroadmap.vercel.app'
+  const greeting = submission.name ? 'Hi ' + submission.name + ',' : 'Hi there,'
+
+  const impactHtml = impactMetric
+    ? '<p style="font-size:13px;color:#085041;margin:8px 0 0;">Early results: ' + impactMetric + '</p>'
+    : ''
+
+  return {
+    subject: 'Something you asked for just shipped \u2014 NeoTaste',
+    html: `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#ffffff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <div style="max-width:560px;margin:0 auto;">
+    <div style="background:#0D2818;padding:24px 24px 20px;border-radius:0 0 12px 12px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <img src="${appUrl}/neotaste-icon.png" alt="NeoTaste" width="28" height="28" style="border-radius:6px;" />
+        <span style="color:#ffffff;font-size:14px;font-weight:600;">NeoTaste Voice</span>
+      </div>
+    </div>
+    <div style="padding:24px;">
+      <p style="font-size:14px;color:#333;line-height:1.6;">${greeting}</p>
+      <p style="font-size:14px;color:#333;line-height:1.6;">A while back you told us about something that wasn't working in the app.</p>
+      <blockquote style="margin:16px 0;padding:12px 16px;background:#f9f9f9;border-left:3px solid #50E88A;border-radius:0 8px 8px 0;">
+        <p style="margin:0;font-size:13px;color:#555;font-style:italic;">${submission.body}</p>
+      </blockquote>
+      <p style="font-size:14px;color:#333;line-height:1.6;">We heard you \u2014 and we just shipped something that addresses this.</p>
+      <div style="margin:16px 0;padding:16px 20px;background:#E1F5EE;border-radius:8px;">
+        <p style="margin:0;font-size:15px;color:#085041;font-weight:600;">${initiative.title}</p>
+        <p style="margin:6px 0 0;font-size:13px;color:#085041;">${releaseNote}</p>
+        ${impactHtml}
+      </div>
+      <div style="margin-top:24px;text-align:center;">
+        <a href="${appUrl}/releases" style="display:inline-block;padding:10px 24px;background:#0D2818;color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;border-radius:8px;">See what shipped &rarr;</a>
+      </div>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:32px 0 16px;" />
+      <p style="font-size:11px;color:#999;line-height:1.5;">
+        You received this because you submitted feedback to NeoTaste Voice.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`,
+  }
+}
+
 const STATUS_LABELS: Record<string, string> = {
   reviewing: 'Under review',
   actioned: 'Actioned',

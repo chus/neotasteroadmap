@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
-import { CRITERION_CONFIG, COLUMNS, EFFORT_CONFIG, MONTHS_2026, MONTH_SHORT, PHASE_CONFIG, isMonthInColumnRange } from '@/lib/constants'
+import { CRITERION_CONFIG, COLUMNS, EFFORT_CONFIG, MONTHS_2026, MONTH_SHORT, PHASE_CONFIG, isMonthInColumnRange, formatSyncLogChanges } from '@/lib/constants'
 import { getLinkedRequest, pushToLinear, pullFromLinear, unlinkFromLinear, getLinearSyncLog, getChildInitiatives, getReactionsForInitiative, runDriftDetection, applyLinearDrift, dismissDrift, pushAndResolveDrift, getInitiativeById } from '@/app/actions'
 import ReactionBar from './ReactionBar'
 import DecisionLog from './DecisionLog'
@@ -36,6 +36,9 @@ interface Props {
     phase?: string | null
     confidence_problem?: number | null
     confidence_solution?: number | null
+    impact_metric?: string | null
+    impact_measured_at?: string | null
+    shipped_by?: string | null
   }) => Promise<void>
   onDelete: () => void
   onClose: () => void
@@ -57,6 +60,11 @@ function makeForm(initiative: Initiative) {
     phase: initiative.phase ?? '',
     confidence_problem: initiative.confidence_problem,
     confidence_solution: initiative.confidence_solution,
+    impact_metric: initiative.impact_metric ?? '',
+    impact_measured_at: initiative.impact_measured_at
+      ? new Date(initiative.impact_measured_at).toISOString().slice(0, 10)
+      : '',
+    shipped_by: initiative.shipped_by ?? '',
   }
 }
 
@@ -520,7 +528,7 @@ function LinearSection({
                     <span>{entry.direction === 'push' ? '↑' : '↓'}</span>
                     <span className={`w-1.5 h-1.5 rounded-full ${entry.status === 'success' ? 'bg-green-500' : 'bg-red-500'}`} />
                     <span className="text-neutral-500 truncate flex-1">
-                      {entry.changes || entry.error_message || entry.direction}
+                      {entry.changes ? formatSyncLogChanges(entry.changes) : entry.error_message || entry.direction}
                     </span>
                     <span className="text-neutral-400 shrink-0">{timeAgo(new Date(entry.created_at))}</span>
                   </div>
@@ -667,6 +675,11 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
         ...(initiative.is_parent ? { phase: form.phase || null } : {}),
         confidence_problem: form.confidence_problem,
         confidence_solution: form.confidence_solution,
+        ...(initiative.column === 'released' ? {
+          impact_metric: form.impact_metric || null,
+          impact_measured_at: form.impact_measured_at || null,
+          shipped_by: form.shipped_by || null,
+        } : {}),
       })
       setSaving(false)
       setSaved(true)
@@ -964,6 +977,42 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                 </div>
               )}
 
+              {/* Impact fields (released items only) */}
+              {initiative.column === 'released' && (
+                <div className="space-y-3 pt-3 border-t border-neutral-100">
+                  <div className={`${labelClass} mb-0`}>Impact</div>
+                  <div>
+                    <label className={labelClass}>Impact metric</label>
+                    <input
+                      type="text"
+                      value={form.impact_metric}
+                      onChange={(e) => setForm({ ...form, impact_metric: e.target.value })}
+                      placeholder="Metric · change · timeframe"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Measured on</label>
+                    <input
+                      type="date"
+                      value={form.impact_measured_at}
+                      onChange={(e) => setForm({ ...form, impact_measured_at: e.target.value })}
+                      className={inputClass}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Shipped by</label>
+                    <input
+                      type="text"
+                      value={form.shipped_by}
+                      onChange={(e) => setForm({ ...form, shipped_by: e.target.value })}
+                      placeholder="Name or team"
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Save error */}
               {saveError && (
                 <p className="text-[12px] text-red-500 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>
@@ -1199,6 +1248,54 @@ export default function InitiativeSlideOver({ initiative, strategicLevels, onSav
                   <dd className="text-neutral-600">{initiative.is_public ? 'Yes' : 'No'}</dd>
                 </dl>
               </section>
+
+              {/* Released metadata */}
+              {initiative.column === 'released' && (
+                <>
+                  <hr className="my-5" style={{ borderColor: '#f0f0f0' }} />
+                  <section>
+                    <div className="text-[10px] font-medium text-neutral-400 uppercase tracking-wide mb-3">Release info</div>
+                    <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-[12px]">
+                      <dt className="text-neutral-400">Released</dt>
+                      <dd className="text-neutral-600">
+                        {initiative.released_at
+                          ? new Date(initiative.released_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+                          : '—'}
+                      </dd>
+                      <dt className="text-neutral-400">Release note</dt>
+                      <dd className="text-neutral-600">{initiative.release_note || '—'}</dd>
+                      <dt className="text-neutral-400">Impact</dt>
+                      <dd className="text-neutral-600">
+                        {initiative.impact_metric || (
+                          <span className="italic text-neutral-400">
+                            No impact data yet
+                            <button
+                              onClick={() => setEditing(true)}
+                              className="ml-1.5 text-blue-500 hover:underline not-italic"
+                            >
+                              Add impact
+                            </button>
+                          </span>
+                        )}
+                      </dd>
+                      {initiative.impact_measured_at && (
+                        <>
+                          <dt className="text-neutral-400">Measured</dt>
+                          <dd className="text-neutral-600">
+                            {new Date(initiative.impact_measured_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                          </dd>
+                        </>
+                      )}
+                      {initiative.shipped_by && (
+                        <>
+                          <dt className="text-neutral-400">Shipped by</dt>
+                          <dd className="text-neutral-600">{initiative.shipped_by}</dd>
+                        </>
+                      )}
+                    </dl>
+                  </section>
+                </>
+              )}
 
               <hr className="my-5" style={{ borderColor: '#f0f0f0' }} />
 

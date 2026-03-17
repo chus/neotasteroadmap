@@ -251,6 +251,9 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
     phase?: string | null
     confidence_problem?: number | null
     confidence_solution?: number | null
+    impact_metric?: string | null
+    impact_measured_at?: string | null
+    shipped_by?: string | null
   }) {
     if (!selectedInitiative) return
     await updateInitiative(selectedInitiative.id, data)
@@ -262,6 +265,7 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
       phase: (data.phase as Initiative['phase']) ?? selectedInitiative.phase,
       strategic_level_name: level?.name ?? '',
       strategic_level_color: level?.color ?? '#999',
+      impact_measured_at: data.impact_measured_at ? new Date(data.impact_measured_at) : selectedInitiative.impact_measured_at,
     }
     setItems((prev) =>
       prev.map((i) => i.id === selectedInitiative.id ? updatedInit : i)
@@ -676,8 +680,8 @@ export default function Board({ initialData, initialLevels, initialKeyAccounts =
       {pendingRelease && (
         <ReleaseModal
           initiativeTitle={items.find((i) => i.id === pendingRelease.initiativeId)?.title ?? ''}
-          onConfirm={async (releaseNote) => {
-            await releaseInitiative(pendingRelease.initiativeId, releaseNote)
+          onConfirm={async (releaseNote, impactMetric, measuredDate) => {
+            await releaseInitiative(pendingRelease.initiativeId, releaseNote, impactMetric || undefined, measuredDate || undefined)
             setItems((prev) =>
               prev.map((i) =>
                 i.id === pendingRelease.initiativeId

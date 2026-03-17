@@ -4,12 +4,14 @@ import { useState, useRef, useEffect } from 'react'
 
 interface Props {
   initiativeTitle: string
-  onConfirm: (releaseNote: string) => void
+  onConfirm: (releaseNote: string, impactMetric: string, measuredDate: string) => void
   onCancel: () => void
 }
 
 export default function ReleaseModal({ initiativeTitle, onConfirm, onCancel }: Props) {
   const [note, setNote] = useState('')
+  const [impactMetric, setImpactMetric] = useState('')
+  const [measuredDate, setMeasuredDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [saving, setSaving] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -20,7 +22,7 @@ export default function ReleaseModal({ initiativeTitle, onConfirm, onCancel }: P
   async function handleConfirm() {
     if (!note.trim()) return
     setSaving(true)
-    onConfirm(note.trim())
+    onConfirm(note.trim(), impactMetric.trim(), impactMetric.trim() ? measuredDate : '')
   }
 
   return (
@@ -42,6 +44,30 @@ export default function ReleaseModal({ initiativeTitle, onConfirm, onCancel }: P
           rows={3}
           className="w-full text-[13px] border border-neutral-200 rounded-lg px-3 py-2 outline-none focus:border-neutral-400 resize-none"
         />
+
+        <div className="mt-3 space-y-2">
+          <div>
+            <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Impact (optional)</label>
+            <input
+              type="text"
+              value={impactMetric}
+              onChange={(e) => setImpactMetric(e.target.value)}
+              placeholder="Metric · change · timeframe"
+              className="w-full mt-1 text-[13px] border border-neutral-200 rounded-lg px-3 py-1.5 outline-none focus:border-neutral-400"
+            />
+          </div>
+          {impactMetric.trim() && (
+            <div>
+              <label className="text-[11px] font-medium text-neutral-500 uppercase tracking-wide">Measured on</label>
+              <input
+                type="date"
+                value={measuredDate}
+                onChange={(e) => setMeasuredDate(e.target.value)}
+                className="w-full mt-1 text-[13px] border border-neutral-200 rounded-lg px-3 py-1.5 outline-none focus:border-neutral-400"
+              />
+            </div>
+          )}
+        </div>
 
         <div className="flex items-center justify-end gap-2 mt-4">
           <button

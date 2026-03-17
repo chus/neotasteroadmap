@@ -53,6 +53,11 @@ export interface Initiative {
   sync_drift: string | null
   sync_drift_detected_at: Date | null
   sync_dismissed_at: Date | null
+  released_at: Date | null
+  release_note: string | null
+  impact_metric: string | null
+  impact_measured_at: Date | null
+  shipped_by: string | null
   created_at: Date
 }
 
@@ -238,6 +243,36 @@ export interface AgentRunLogEntry {
   run_date: string
   report: string
   slack_posted: boolean
+  created_at: Date
+}
+
+// ─── Comms Digest ───
+
+export type DigestStatus = 'draft' | 'approved' | 'sent' | 'skipped'
+
+export interface CommsDigest {
+  id: string
+  period_label: string
+  period_start: Date
+  period_end: Date
+  status: DigestStatus
+  skip_reason: string
+  draft_content: string
+  email_html: string
+  email_subject: string
+  recipient_count: number
+  sent_at: Date | null
+  auto_send_at: Date | null
+  pm_edited: boolean
+  created_at: Date
+}
+
+export interface DigestRecipient {
+  id: string
+  email: string
+  name: string
+  role: string
+  is_active: boolean
   created_at: Date
 }
 

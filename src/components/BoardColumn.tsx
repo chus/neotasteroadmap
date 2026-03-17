@@ -1,9 +1,12 @@
 'use client'
 
+import { useState } from 'react'
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import InitiativeCard from './InitiativeCard'
 import type { Initiative, Column, ReactionCount } from '@/types'
+
+const RELEASED_CAP = 5
 
 interface Props {
   columnId: Column
@@ -37,12 +40,25 @@ export default function BoardColumn({
   reactionMap,
 }: Props) {
   const { setNodeRef } = useDroppable({ id: columnId })
+  const [showAll, setShowAll] = useState(false)
 
-  const visibleInitiatives = initiatives.filter((i) => {
+  const filteredInitiatives = initiatives.filter((i) => {
     const matchesFilter = !activeFilterLevelId || i.strategic_level_id === activeFilterLevelId
     const matchesSearch = !searchQuery || i.title.toLowerCase().includes(searchQuery.toLowerCase())
     return matchesFilter && matchesSearch
   })
+
+  // Released column: sort by released_at desc, cap at 5 unless expanded
+  const isReleased = columnId === 'released'
+  const sorted = isReleased
+    ? [...filteredInitiatives].sort((a, b) => {
+        const da = a.released_at ? new Date(a.released_at).getTime() : 0
+        const db = b.released_at ? new Date(b.released_at).getTime() : 0
+        return db - da
+      })
+    : filteredInitiatives
+  const canCollapse = isReleased && sorted.length > RELEASED_CAP
+  const visibleInitiatives = canCollapse && !showAll ? sorted.slice(0, RELEASED_CAP) : sorted
 
   return (
     <div className="flex flex-col min-h-0">
@@ -89,6 +105,14 @@ export default function BoardColumn({
           )}
         </SortableContext>
       </div>
+      {canCollapse && (
+        <button
+          onClick={() => setShowAll(!showAll)}
+          className="mt-1 w-full text-[11px] text-neutral-400 hover:text-neutral-600 py-1"
+        >
+          {showAll ? 'Show less' : `Show ${sorted.length - RELEASED_CAP} more`}
+        </button>
+      )}
       <button
         onClick={() => onAddClick(columnId)}
         className="mt-2 w-full text-[11px] text-neutral-400 hover:text-neutral-600 border border-dashed border-neutral-300 rounded-lg py-1.5 hover:border-neutral-400 transition-colors"

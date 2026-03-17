@@ -49,6 +49,9 @@ export const initiatives = pgTable('initiatives', {
   sync_dismissed_at: timestamp('sync_dismissed_at'),
   released_at: timestamp('released_at'),
   release_note: text('release_note'),
+  impact_metric: text('impact_metric').default(''),
+  impact_measured_at: timestamp('impact_measured_at'),
+  shipped_by: text('shipped_by').default(''),
   created_at: timestamp('created_at').defaultNow(),
 })
 
@@ -241,6 +244,32 @@ export const researchParticipants = pgTable('research_participants', {
   last_contacted_at: timestamp('last_contacted_at'),
   contact_count: integer('contact_count').default(0),
   opted_in_at: timestamp('opted_in_at').defaultNow(),
+  created_at: timestamp('created_at').defaultNow(),
+})
+
+export const commsDigests = pgTable('comms_digests', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  period_label: text('period_label').notNull(),
+  period_start: date('period_start').notNull(),
+  period_end: date('period_end').notNull(),
+  status: text('status').default('draft'),
+  skip_reason: text('skip_reason').default(''),
+  draft_content: text('draft_content').default(''),
+  email_html: text('email_html').default(''),
+  email_subject: text('email_subject').default(''),
+  recipient_count: integer('recipient_count').default(0),
+  sent_at: timestamp('sent_at'),
+  auto_send_at: timestamp('auto_send_at'),
+  pm_edited: boolean('pm_edited').default(false),
+  created_at: timestamp('created_at').defaultNow(),
+})
+
+export const digestRecipients = pgTable('digest_recipients', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  email: text('email').notNull().unique(),
+  name: text('name').notNull(),
+  role: text('role').default(''),
+  is_active: boolean('is_active').default(true),
   created_at: timestamp('created_at').defaultNow(),
 })
 

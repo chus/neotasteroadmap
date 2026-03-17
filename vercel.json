@@ -21,6 +21,14 @@
     {
       "path": "/api/feedback/agent?token=${DIGEST_CRON_SECRET}",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/comms/generate?token=${DIGEST_CRON_SECRET}",
+      "schedule": "0 9 1 * *"
+    },
+    {
+      "path": "/api/comms/auto-send?token=${DIGEST_CRON_SECRET}",
+      "schedule": "0 * * * *"
     }
   ]
 }
