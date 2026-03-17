@@ -189,7 +189,7 @@ export async function buildDigestData(periodStart: Date, periodEnd: Date): Promi
 }
 
 export async function generateDigestDraft(data: DigestData): Promise<{ subject: string; html: string }> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
   console.log('[ANTHROPIC DEBUG]', {
     keyExists: !!apiKey,
     keyLength: apiKey?.length,

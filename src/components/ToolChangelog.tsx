@@ -9,6 +9,12 @@ import { useState } from 'react'
 const TOOL_CHANGELOG = [
   {
     date: '2026-03-18',
+    title: 'Runtime env diagnostics + API key hardening',
+    description: 'Added /api/env-check runtime diagnostic endpoint. Applied .trim() to all ANTHROPIC_API_KEY reads to prevent hidden whitespace issues.',
+    category: 'core',
+  },
+  {
+    date: '2026-03-18',
     title: 'Anthropic API key diagnosis and fix',
     description: 'Diagnosed and fixed Anthropic API authentication error in comms digest generation.',
     category: 'core',

@@ -1565,7 +1565,7 @@ export async function deleteDecisionEntry(id: string) {
 // ─── AI Triage ───
 
 export async function triageFeatureRequest(requestId: string) {
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
   if (!apiKey) return
 
   const [request] = await db.select().from(featureRequests).where(eq(featureRequests.id, requestId))

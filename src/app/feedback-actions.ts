@@ -88,7 +88,7 @@ async function sendConfirmationEmail(email: string, name: string, title: string,
 // ─── AI Triage ───
 
 export async function triageFeedbackSubmission(id: string) {
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
   if (!apiKey) return
 
   const [submission] = await db.select().from(feedbackSubmissions).where(eq(feedbackSubmissions.id, id))
@@ -500,7 +500,7 @@ export async function runClustering(): Promise<{ clustersCreated: number; submis
 }
 
 async function generateClusterLabel(titles: string[]): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
   if (!apiKey) return titles[0] ?? 'Unnamed cluster'
 
   try {
@@ -930,7 +930,7 @@ export async function graduateClusterToBacklog(
 async function generatePrioritySignal(
   title: string, description: string, count: number, area: string,
 ): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim()
   if (!apiKey) return ''
   try {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
