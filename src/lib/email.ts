@@ -11,10 +11,10 @@ if (apiKey) {
   console.warn('[email] RESEND_API_KEY not set — email notifications disabled')
 }
 
-export async function sendEmail(to: string, subject: string, html: string) {
+export async function sendEmail(to: string, subject: string, html: string): Promise<boolean> {
   if (!resend) {
     console.warn('[email] Skipping email send — Resend not configured')
-    return
+    return false
   }
 
   try {
@@ -24,7 +24,9 @@ export async function sendEmail(to: string, subject: string, html: string) {
       subject,
       html,
     })
+    return true
   } catch (err) {
     console.error('[email] Failed to send email:', err)
+    return false
   }
 }

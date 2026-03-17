@@ -2099,11 +2099,16 @@ export async function sendDigest(id: string) {
   const { sendEmail } = await import('@/lib/email')
 
   let sent = 0
+  let failed = 0
   for (const recipient of recipients) {
     const personalizedHtml = (digest.email_html ?? '').replace('RECIPIENT_EMAIL', encodeURIComponent(recipient.email))
-    await sendEmail(recipient.email, digest.email_subject ?? '', personalizedHtml)
-      .catch(err => console.warn(`Failed to send to ${recipient.email}:`, err))
-    sent++
+    const ok = await sendEmail(recipient.email, digest.email_subject ?? '', personalizedHtml)
+    if (ok) sent++
+    else failed++
+  }
+
+  if (sent === 0 && recipients.length > 0) {
+    return { error: `No emails delivered (${failed} failed). Check RESEND_API_KEY is set.` }
   }
 
   await db.update(commsDigests).set({
